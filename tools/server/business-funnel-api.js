@@ -10,7 +10,37 @@ export class BusinessFunnelAPI {
         this.invoicesDbPath = join(projectRoot, 'data/roofmaxx_invoices/roofmaxx_lead_invoices.db');
     }
 
+    /**
+     * Validate and sanitize date input to prevent SQL injection
+     * @param {string} date - Date string in YYYY-MM-DD format
+     * @returns {string} Validated date or throws error
+     */
+    _validateDate(date) {
+        if (!date) {
+            throw new Error('Date parameter is required');
+        }
+
+        // Check format: YYYY-MM-DD
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(date)) {
+            throw new Error('Invalid date format. Expected YYYY-MM-DD');
+        }
+
+        // Validate it's actually a valid date
+        const dateObj = new Date(date);
+        if (isNaN(dateObj.getTime())) {
+            throw new Error('Invalid date value');
+        }
+
+        // Return the validated date
+        return date;
+    }
+
     getBusinessFunnelDataByDates(startDate, endDate) {
+        // Validate dates to prevent SQL injection
+        const safeStartDate = this._validateDate(startDate);
+        const safeEndDate = this._validateDate(endDate);
+
         const db = new Database(this.localbaseDbPath);
 
         try {
@@ -21,7 +51,7 @@ export class BusinessFunnelAPI {
                 console.warn('QuickBooks database not available:', err.message);
             }
 
-            const dateFilter = `AND d.date >= '${startDate}' AND d.date <= '${endDate}'`;
+            const dateFilter = `AND d.date >= '${safeStartDate}' AND d.date <= '${safeEndDate}'`;
 
             const query = this._buildQuery(dateFilter);
             const rows = db.prepare(query).all();
@@ -42,7 +72,7 @@ export class BusinessFunnelAPI {
             }));
 
             // Calculate period-level unique counts (not summed daily counts)
-            const summary = this._calculatePeriodSummary(db, startDate, endDate);
+            const summary = this._calculatePeriodSummary(db, safeStartDate, safeEndDate);
 
             return {
                 data,
@@ -61,6 +91,12 @@ export class BusinessFunnelAPI {
     }
 
     getBusinessFunnelData(range = 'mtd') {
+        // Whitelist valid range values to prevent injection
+        const validRanges = ['last7days', 'last30days', 'mtd', 'ytd', 'all'];
+        if (range && !validRanges.includes(range)) {
+            throw new Error(`Invalid range parameter. Must be one of: ${validRanges.join(', ')}`);
+        }
+
         const db = new Database(this.localbaseDbPath);
 
         try {
@@ -356,6 +392,10 @@ export class BusinessFunnelAPI {
     }
 
     getMarketingSpendByDates(startDate, endDate) {
+        // Validate dates to prevent injection
+        const safeStartDate = this._validateDate(startDate);
+        const safeEndDate = this._validateDate(endDate);
+
         const results = {};
 
         // Get Google Ads spend
@@ -366,7 +406,7 @@ export class BusinessFunnelAPI {
                 FROM google_ads_data
                 WHERE date >= ? AND date <= ?
                 GROUP BY date
-            `).all(startDate, endDate);
+            `).all(safeStartDate, safeEndDate);
             googleDb.close();
 
             googleRows.forEach(row => {
@@ -385,7 +425,7 @@ export class BusinessFunnelAPI {
                 FROM facebook_daily_ad_spend
                 WHERE date >= ? AND date <= ?
                 GROUP BY date
-            `).all(startDate, endDate);
+            `).all(safeStartDate, safeEndDate);
             facebookDb.close();
 
             facebookRows.forEach(row => {
@@ -404,7 +444,7 @@ export class BusinessFunnelAPI {
                 FROM invoices
                 WHERE invoice_date >= ? AND invoice_date <= ?
                 GROUP BY invoice_date
-            `).all(startDate, endDate);
+            `).all(safeStartDate, safeEndDate);
             invoicesDb.close();
 
             invoiceRows.forEach(row => {

@@ -6,7 +6,7 @@
  */
 
 import express from 'express';
-import { join, dirname } from 'path';
+import { join, dirname, basename, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import { VizRegistry } from '../viz/registry.js';
 import { unlinkSync, existsSync } from 'fs';
@@ -521,7 +521,21 @@ app.delete('/api/viz/:id', async (req, res) => {
     console.log(`📋 Found viz: ${viz.title} (${viz.filename})`);
 
     // Delete the HTML file from viz folder
-    const vizPath = join(appDir, 'viz', viz.filename);
+    // Prevent path traversal attacks - sanitize filename
+    const safeFilename = basename(viz.filename);
+    const vizPath = join(appDir, 'viz', safeFilename);
+
+    // Verify the resolved path is still within viz directory
+    const normalizedPath = normalize(vizPath);
+    const normalizedVizDir = normalize(join(appDir, 'viz'));
+    if (!normalizedPath.startsWith(normalizedVizDir)) {
+      console.error(`❌ Path traversal detected: ${viz.filename}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid file path'
+      });
+    }
+
     if (existsSync(vizPath)) {
       unlinkSync(vizPath);
       console.log(`🗂️ Deleted file: ${vizPath}`);

@@ -3,7 +3,7 @@
  */
 
 import { readFileSync, writeFileSync, unlinkSync, statSync } from 'fs';
-import { join } from 'path';
+import { join, basename, normalize } from 'path';
 
 export class VizRegistry {
   constructor(outputDir = 'web-app') {
@@ -86,11 +86,21 @@ export class VizRegistry {
     // Remove from filesystem if local
     if (viz.filename && !viz.deployed) {
       try {
-        const filePath = join(this.outputDir, viz.filename);
+        // Prevent path traversal attacks - sanitize filename
+        const safeFilename = basename(viz.filename);
+        const filePath = join(this.outputDir, safeFilename);
+
+        // Verify the resolved path is still within outputDir
+        const normalizedPath = normalize(filePath);
+        const normalizedOutputDir = normalize(this.outputDir);
+        if (!normalizedPath.startsWith(normalizedOutputDir)) {
+          throw new Error('Invalid file path: path traversal detected');
+        }
+
         unlinkSync(filePath);
-        console.log(`🗑️  Deleted file: ${viz.filename}`);
+        console.log(`🗑️  Deleted file: ${safeFilename}`);
       } catch (error) {
-        console.warn(`⚠️  Could not delete file: ${viz.filename}`);
+        console.warn(`⚠️  Could not delete file: ${viz.filename}`, error.message);
       }
     }
 
