@@ -1,0 +1,770 @@
+import { useState, useEffect } from 'react'
+import { Database, Loader2, FolderOpen, RefreshCw, Check, X, Edit, Save } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import Setup from '@/components/Setup'
+
+// Helper function to get sync status color based on date
+function getSyncStatusColor(lastSyncDate) {
+  if (!lastSyncDate || lastSyncDate === 'Unknown') return 'text-muted-foreground'
+
+  try {
+    // Parse YYYY-MM-DD format to avoid timezone issues
+    const [year, month, day] = lastSyncDate.split('-').map(Number)
+    const syncDate = new Date(year, month - 1, day)
+
+    const today = new Date()
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+
+    const diffTime = todayDate - syncDate
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+    if (diffDays <= 0) return 'text-green-400' // Today or future
+    if (diffDays <= 7) return 'text-yellow-400' // Within last week
+    return 'text-red-400' // Older than 7 days
+  } catch {
+    return 'text-muted-foreground'
+  }
+}
+
+// Helper function to get sort priority (stoplight order: green, yellow, red, unknown)
+function getSyncSortPriority(lastSyncDate) {
+  if (!lastSyncDate || lastSyncDate === 'Unknown') return 4 // Unknown goes last
+
+  try {
+    const [year, month, day] = lastSyncDate.split('-').map(Number)
+    const syncDate = new Date(year, month - 1, day)
+    const today = new Date()
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const diffTime = todayDate - syncDate
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+    if (diffDays <= 0) return 1 // Green - today
+    if (diffDays <= 7) return 2 // Yellow - within last week
+    return 3 // Red - older than 7 days
+  } catch {
+    return 4 // Unknown
+  }
+}
+
+export default function Overview({ onNavigateHome }) {
+  const [expressStatus, setExpressStatus] = useState('checking')
+  const [mcpStatus, setMcpStatus] = useState('running') // MCP runs in Electron process
+  const [databaseMode, setDatabaseMode] = useState(null) // 'cloud' or 'local'
+  const [databaseUrl, setDatabaseUrl] = useState('')
+  const [projectRoot, setProjectRoot] = useState('')
+  const [showingSetup, setShowingSetup] = useState(false)
+  const [connectors, setConnectors] = useState([])
+  const [connectorsLoading, setConnectorsLoading] = useState(true)
+  const [visualizations, setVisualizations] = useState([])
+  const [dataSources, setDataSources] = useState([])
+  const [dataSourcesLoading, setDataSourcesLoading] = useState(true)
+  const [forceSingleWorkspace, setForceSingleWorkspace] = useState(() => {
+    return localStorage.getItem('localbase-force-single-workspace') === 'true'
+  })
+  const [syncingSource, setSyncingSource] = useState(null) // Track which source is syncing
+  const [syncStatus, setSyncStatus] = useState({}) // Track sync status per source: { sourceId: 'success'|'error' }
+  const [editingDatabase, setEditingDatabase] = useState(false)
+  const [supabaseUrl, setSupabaseUrl] = useState('')
+  const [supabaseKey, setSupabaseKey] = useState('')
+  const [savingDatabase, setSavingDatabase] = useState(false)
+
+  // Load project root on mount
+  useEffect(() => {
+    if (window.electronAPI?.config) {
+      window.electronAPI.config.getProjectRoot().then(root => {
+        setProjectRoot(root)
+      })
+    }
+  }, [])
+
+  // Check database mode and load Supabase config
+  useEffect(() => {
+    const checkDatabaseMode = async () => {
+      try {
+        // Get Supabase config from main process
+        if (window.electronAPI?.config?.getSupabaseConfig) {
+          const config = await window.electronAPI.config.getSupabaseConfig()
+
+          if (config && config.url && config.key) {
+            setDatabaseMode('cloud')
+            // Extract short URL (remove https://)
+            const shortUrl = config.url.replace('https://', '')
+            setDatabaseUrl(shortUrl)
+            // Pre-populate edit fields
+            setSupabaseUrl(config.url)
+            setSupabaseKey(config.key)
+          } else {
+            setDatabaseMode('local')
+            setDatabaseUrl('Local SQLite')
+          }
+        } else {
+          // Fallback: try a query to detect
+          const result = await window.electronAPI.db.query('SELECT 1 as test', [])
+          setDatabaseMode('cloud')
+          setDatabaseUrl('Supabase PostgreSQL')
+        }
+      } catch (error) {
+        setDatabaseMode('local')
+        setDatabaseUrl('Local SQLite')
+      }
+    }
+
+    if (projectRoot) {
+      checkDatabaseMode()
+    }
+  }, [projectRoot])
+
+  // Load workspace data (connectors, visualizations, data sources)
+  useEffect(() => {
+    const loadWorkspaceData = async () => {
+      if (!projectRoot) return
+
+      // Load connectors
+      if (window.electronAPI?.api?.getConnectors) {
+        setConnectorsLoading(true)
+        try {
+          const result = await window.electronAPI.api.getConnectors()
+          if (result.success) {
+            setConnectors(result.connectors || [])
+          } else {
+            console.error('Failed to load connectors:', result.error)
+            setConnectors([])
+          }
+        } catch (error) {
+          console.error('Error loading connectors:', error)
+          setConnectors([])
+        } finally {
+          setConnectorsLoading(false)
+        }
+      }
+
+      // Load data sources from data-sources.json
+      if (window.electronAPI?.api?.getDataSources) {
+        setDataSourcesLoading(true)
+        try {
+          const result = await window.electronAPI.api.getDataSources()
+          if (result.success && result.sources) {
+            // Convert sources object to array with id
+            const sourcesArray = Object.entries(result.sources).map(([id, data]) => ({
+              id,
+              ...data
+            }))
+
+            // Sort by: 1) automated first, 2) stoplight order (green, yellow, red)
+            sourcesArray.sort((a, b) => {
+              // Automated sources always on top
+              if (a.type === 'automated' && b.type !== 'automated') return -1
+              if (a.type !== 'automated' && b.type === 'automated') return 1
+
+              // Within same type, sort by sync freshness (green, yellow, red)
+              const aPriority = getSyncSortPriority(a.last_sync)
+              const bPriority = getSyncSortPriority(b.last_sync)
+              return aPriority - bPriority
+            })
+
+            setDataSources(sourcesArray)
+          } else {
+            setDataSources([])
+          }
+        } catch (error) {
+          console.error('Error loading data sources:', error)
+          setDataSources([])
+        } finally {
+          setDataSourcesLoading(false)
+        }
+      }
+
+      // Load visualizations
+      if (window.electronAPI?.api?.getVisualizations) {
+        try {
+          const result = await window.electronAPI.api.getVisualizations()
+          setVisualizations(result.visualizations || [])
+        } catch (error) {
+          console.error('Error loading visualizations:', error)
+          setVisualizations([])
+        }
+      }
+    }
+
+    loadWorkspaceData()
+  }, [projectRoot])
+
+  // No longer need HTTP server health check - using direct IPC
+  useEffect(() => {
+    setExpressStatus('running')
+  }, [])
+
+  const handleChangeProject = () => {
+    setShowingSetup(true)
+  }
+
+  const handleSetupComplete = () => {
+    setShowingSetup(false)
+    // Reload UI to show new project path
+    // Backend servers will hot-reload automatically
+    window.location.reload()
+  }
+
+  const handleToggleSingleWorkspace = (enabled) => {
+    setForceSingleWorkspace(enabled)
+    localStorage.setItem('localbase-force-single-workspace', enabled.toString())
+    // Dispatch event so other components can react
+    window.dispatchEvent(new CustomEvent('single-workspace-mode-changed', { detail: enabled }))
+  }
+
+  const handleSyncSource = async (sourceId) => {
+    setSyncingSource(sourceId)
+    setSyncStatus(prev => ({ ...prev, [sourceId]: null })) // Clear previous status
+
+    try {
+      if (window.electronAPI?.api?.syncDataSource) {
+        const result = await window.electronAPI.api.syncDataSource(sourceId)
+
+        if (result.success) {
+          setSyncStatus(prev => ({ ...prev, [sourceId]: 'success' }))
+          // Reload data sources to show updated timestamp
+          setTimeout(async () => {
+            if (window.electronAPI?.api?.getDataSources) {
+              const sourcesResult = await window.electronAPI.api.getDataSources()
+              if (sourcesResult.success && sourcesResult.sources) {
+                const sourcesArray = Object.entries(sourcesResult.sources).map(([id, data]) => ({
+                  id,
+                  ...data
+                }))
+
+                // Sort by: 1) automated first, 2) stoplight order (green, yellow, red)
+                sourcesArray.sort((a, b) => {
+                  // Automated sources always on top
+                  if (a.type === 'automated' && b.type !== 'automated') return -1
+                  if (a.type !== 'automated' && b.type === 'automated') return 1
+
+                  // Within same type, sort by sync freshness (green, yellow, red)
+                  const aPriority = getSyncSortPriority(a.last_sync)
+                  const bPriority = getSyncSortPriority(b.last_sync)
+                  return aPriority - bPriority
+                })
+
+                setDataSources(sourcesArray)
+              }
+            }
+          }, 500)
+        } else {
+          setSyncStatus(prev => ({ ...prev, [sourceId]: 'error' }))
+        }
+      }
+    } catch (error) {
+      console.error('Sync error:', error)
+      setSyncStatus(prev => ({ ...prev, [sourceId]: 'error' }))
+    } finally {
+      setSyncingSource(null)
+      // Clear status after 3 seconds
+      setTimeout(() => {
+        setSyncStatus(prev => ({ ...prev, [sourceId]: null }))
+      }, 3000)
+    }
+  }
+
+  // Show setup modal when changing project
+  if (showingSetup) {
+    return (
+      <div className="fixed inset-0 bg-background z-50">
+        <Setup onComplete={handleSetupComplete} />
+      </div>
+    )
+  }
+
+  // Show empty state if no workspace selected
+  if (!projectRoot) {
+    return (
+      <div className="p-8 space-y-8">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold font-mono text-green-400">
+            LocalBase Desktop
+          </h1>
+          <p className="text-muted-foreground">
+            Manage your local data infrastructure
+          </p>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>No Workspace Selected</CardTitle>
+            <CardDescription>
+              Select a workspace from the Home view to see settings and connectors
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              onClick={() => onNavigateHome?.()}
+              className="border-green-400/50 text-green-400 hover:bg-green-400/10"
+            >
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Go to Home
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-8 space-y-8">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold font-mono text-green-400">
+          LocalBase Desktop
+        </h1>
+        <p className="text-muted-foreground">
+          Manage your local data infrastructure
+        </p>
+      </div>
+
+      {/* Connectors */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Active Connectors</h2>
+        </div>
+
+        {connectorsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-green-400" />
+          </div>
+        ) : connectors.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <p className="text-muted-foreground">No connectors found in this workspace</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Add connectors to the <code className="bg-muted px-1 py-0.5 rounded">connectors/</code> directory
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {connectors.map((connector) => (
+              <Card key={connector.id}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Database className="h-5 w-5 text-green-400" />
+                    {connector.name}
+                  </CardTitle>
+                  <CardDescription>{connector.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Last sync: {connector.lastSync}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full ${
+                        connector.status === 'active' ? 'bg-green-400' :
+                        connector.status === 'missing-index' ? 'bg-orange-400' :
+                        'bg-red-400'
+                      }`} />
+                      <span className={`text-xs ${
+                        connector.status === 'active' ? 'text-green-400' :
+                        connector.status === 'missing-index' ? 'text-orange-400' :
+                        'text-red-400'
+                      }`}>
+                        {connector.status === 'active' ? 'Active' :
+                         connector.status === 'missing-index' ? 'Missing index.js' :
+                         'Needs Fix'}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Data Sources */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Data Sources</h2>
+        </div>
+
+        {dataSourcesLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-green-400" />
+          </div>
+        ) : dataSources.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <p className="text-muted-foreground">No data sources configured</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Create <code className="bg-muted px-1 py-0.5 rounded">data/data-sources.json</code> to configure sources
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border">
+                {dataSources
+                  .sort((a, b) => {
+                    // Automated sources first, then manual
+                    if (a.type === 'automated' && b.type !== 'automated') return -1
+                    if (a.type !== 'automated' && b.type === 'automated') return 1
+                    return 0
+                  })
+                  .map((source) => (
+                  <div key={source.id} className="p-4 hover:bg-muted/5 transition-colors">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Database className="h-4 w-4 text-green-400 flex-shrink-0" />
+                          <h3 className="font-medium truncate">{source.name}</h3>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span className="text-xs">
+                            {source.type === 'automated' ? '🤖 Automated' : '📝 Manual'}
+                          </span>
+                          {source.data?.records && (
+                            <span className="font-mono text-xs">
+                              {source.data.records.toLocaleString()} records
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 text-right">
+                          <div className={`text-sm font-medium ${
+                            syncStatus[source.id] === 'success'
+                              ? 'text-green-400'
+                              : syncStatus[source.id] === 'error'
+                              ? 'text-red-400'
+                              : getSyncStatusColor(source.last_sync)
+                          }`}>
+                            {source.last_sync || 'Unknown'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            Last sync
+                          </div>
+                        </div>
+                        {source.type === 'automated' && (
+                          <button
+                            onClick={() => handleSyncSource(source.id)}
+                            disabled={syncingSource === source.id}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                              syncStatus[source.id] === 'success'
+                                ? 'bg-green-400/20 text-green-400'
+                                : syncStatus[source.id] === 'error'
+                                ? 'bg-red-400/20 text-red-400'
+                                : 'hover:bg-muted'
+                            }`}
+                          >
+                            {syncingSource === source.id ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <span>Syncing...</span>
+                              </>
+                            ) : syncStatus[source.id] === 'success' ? (
+                              <>
+                                <Check className="h-3 w-3" />
+                                <span>Synced</span>
+                              </>
+                            ) : syncStatus[source.id] === 'error' ? (
+                              <>
+                                <X className="h-3 w-3" />
+                                <span>Error</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-3 w-3" />
+                                <span>Sync</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Project Configuration */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Project Configuration</h2>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Working Directory</CardTitle>
+            <CardDescription>LocalBase project root location</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <code className="text-sm bg-muted px-3 py-2 rounded font-mono text-green-400 flex-1 mr-4">
+                  {projectRoot || 'Loading...'}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleChangeProject}
+                  className="border-green-400/50 text-green-400 hover:bg-green-400/10"
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Change
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This directory contains your connectors/, data/, and env.local
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Force Single Workspace Mode</CardTitle>
+            <CardDescription>Simulate single-workspace user experience for testing</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm">When enabled, workspace switcher is hidden</p>
+                <p className="text-xs text-muted-foreground">
+                  Useful for testing the app as a single-workspace user would experience it
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer ml-4">
+                <input
+                  type="checkbox"
+                  checked={forceSingleWorkspace}
+                  onChange={(e) => handleToggleSingleWorkspace(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-400/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-400"></div>
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Server Status */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">System Status</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Database</CardTitle>
+                  <CardDescription>CRM data storage</CardDescription>
+                </div>
+                {!editingDatabase && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingDatabase(true)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!editingDatabase ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className={`h-3 w-3 rounded-full ${
+                      databaseMode === 'cloud' ? 'bg-blue-400 animate-pulse' :
+                      databaseMode === 'local' ? 'bg-green-400' :
+                      'bg-yellow-400 animate-pulse'
+                    }`} />
+                    <p className={`text-sm ${
+                      databaseMode === 'cloud' ? 'text-blue-400' :
+                      databaseMode === 'local' ? 'text-green-400' :
+                      'text-yellow-400'
+                    }`}>
+                      {databaseMode === 'cloud' ? '🌩️ Cloud (Supabase)' :
+                       databaseMode === 'local' ? '💾 Local SQLite' :
+                       'Detecting...'}
+                    </p>
+                  </div>
+                  {databaseMode && (
+                    <>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {databaseMode === 'cloud' ? 'Multi-device sync enabled' : 'Single-device mode'}
+                      </p>
+                      {databaseMode === 'cloud' && databaseUrl && databaseUrl !== 'Supabase PostgreSQL' && (
+                        <p className="text-xs text-muted-foreground mt-1 font-mono">
+                          {databaseUrl}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="supabase-url" className="text-xs">Supabase URL</Label>
+                    <Input
+                      id="supabase-url"
+                      placeholder="https://your-project.supabase.co"
+                      value={supabaseUrl}
+                      onChange={(e) => setSupabaseUrl(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="supabase-key" className="text-xs">Supabase Secret Key</Label>
+                    <Input
+                      id="supabase-key"
+                      type="password"
+                      placeholder="eyJhbGci..."
+                      value={supabaseKey}
+                      onChange={(e) => setSupabaseKey(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        setSavingDatabase(true)
+                        try {
+                          // Save to env.local via IPC
+                          if (window.electronAPI?.config?.saveSupabaseConfig) {
+                            await window.electronAPI.config.saveSupabaseConfig({
+                              url: supabaseUrl,
+                              key: supabaseKey
+                            })
+                          }
+                          setEditingDatabase(false)
+                          // Reload to apply changes
+                          setTimeout(() => window.location.reload(), 500)
+                        } catch (error) {
+                          console.error('Failed to save database config:', error)
+                        } finally {
+                          setSavingDatabase(false)
+                        }
+                      }}
+                      disabled={!supabaseUrl || !supabaseKey || savingDatabase}
+                      className="h-8 text-xs"
+                    >
+                      {savingDatabase ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : (
+                        <Save className="h-3 w-3 mr-1" />
+                      )}
+                      Save & Reload
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditingDatabase(false)}
+                      className="h-8 text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Express Server</CardTitle>
+              <CardDescription>Web dashboard and API</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <div className={`h-3 w-3 rounded-full ${
+                  expressStatus === 'running' ? 'bg-green-400 animate-pulse' :
+                  expressStatus === 'checking' ? 'bg-yellow-400 animate-pulse' :
+                  'bg-red-400'
+                }`} />
+                <p className={`text-sm ${
+                  expressStatus === 'running' ? 'text-green-400' :
+                  expressStatus === 'checking' ? 'text-yellow-400' :
+                  'text-red-400'
+                }`}>
+                  {expressStatus === 'running' ? 'Running on :3000' :
+                   expressStatus === 'checking' ? 'Checking...' :
+                   'Not Running'}
+                </p>
+              </div>
+              {expressStatus === 'stopped' && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Run <code className="bg-muted px-1 py-0.5 rounded">npm start</code> to start the server
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">MCP Server</CardTitle>
+              <CardDescription>Claude AI integration</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <div className={`h-3 w-3 rounded-full ${
+                  mcpStatus === 'running' ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+                }`} />
+                <p className={`text-sm ${
+                  mcpStatus === 'running' ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {mcpStatus === 'running' ? 'Running (stdio)' : 'Not Running'}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                4 tools available for Claude
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Quick Stats</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Total Connectors</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-green-400">{connectors.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {connectors.filter(c => c.status === 'active').length} active
+                {connectors.filter(c => c.status === 'missing-index').length > 0 && `, ${connectors.filter(c => c.status === 'missing-index').length} missing index`}
+                {connectors.filter(c => c.status === 'needs-fix').length > 0 && `, ${connectors.filter(c => c.status === 'needs-fix').length} needs fix`}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Data Sources</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-green-400">{dataSources.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Configured sources</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Visualizations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-green-400">{visualizations.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Charts and dashboards</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}

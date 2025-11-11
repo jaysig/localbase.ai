@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{CHART_TITLE}}</title>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        body {
+            background: #1a1a1a;
+            color: #e5e5e5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .chart-container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .legend-item {
+            transition: opacity 0.3s ease;
+        }
+        .legend-item.inactive {
+            opacity: 0.4;
+        }
+        .legend-item.inactive .legend-marker {
+            background-color: #666 !important;
+        }
+        h1 {
+            color: #fff;
+            margin-bottom: 30px;
+        }
+        .range-btn {
+            padding: 8px 16px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: #999;
+            border-radius: 0;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            margin: 0 5px;
+        }
+        .range-btn:hover {
+            background: #2a2a2a;
+            color: #fff;
+            border-color: #555;
+        }
+        .range-btn:focus {
+            outline: none;
+        }
+        .range-btn.active {
+            background: #667eea;
+            color: #fff;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // Handle preview mode
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('preview') === 'true') {
+            const h1 = document.querySelector('h1');
+            if (h1) h1.style.display = 'none';
+            document.body.style.padding = '10px';
+            document.body.style.margin = '0';
+        }
+    </script>
+
+    <h1>{{CHART_TITLE}}</h1>
+    <div class="chart-container">
+        <div style="margin-bottom: 20px; text-align: center;">
+            <div style="margin-bottom: 15px;">
+                <label style="color: #e5e5e5; margin-right: 10px; font-size: 14px;">Date Range:</label>
+                <input type="date" id="startDate" style="background: #444; color: #e5e5e5; border: 1px solid #666; padding: 6px; border-radius: 4px; margin-right: 5px;">
+                <span style="color: #e5e5e5; margin: 0 5px;">to</span>
+                <input type="date" id="endDate" style="background: #444; color: #e5e5e5; border: 1px solid #666; padding: 6px; border-radius: 4px; margin-right: 10px;">
+                <button class="range-btn" onclick="resetDateRange()" tabindex="1">All Time</button>
+            </div>
+            <div>
+                <label style="color: #e5e5e5; margin-right: 10px; font-size: 14px;">Aggregation:</label>
+                <button class="range-btn agg-btn" data-aggregation="day" tabindex="2">By Day</button>
+                <button class="range-btn agg-btn" data-aggregation="week" tabindex="3">By Week</button>
+                <button class="range-btn agg-btn active" data-aggregation="month" tabindex="4">By Month</button>
+            </div>
+        </div>
+        <div id="chart"></div>
+
+        <div class="custom-legend" style="display: flex; justify-content: center; gap: 30px; margin-top: 20px; flex-wrap: wrap;">
+            {{LEGEND_ITEMS}}
+        </div>
+
+    </div>
+
+    <script>
+        var options = {
+            series: {{SERIES_DATA}},
+            chart: {
+                height: 400,
+                type: 'line',
+                background: 'transparent',
+                toolbar: {
+                    show: true
+                }
+            },
+            dataLabels: {
+                enabled: false
+            },
+            stroke: {
+                curve: 'smooth',
+                width: [2, 2, 2, 2, 3]
+            },
+            title: {
+                text: '',
+                align: 'left',
+                style: {
+                    color: '#e5e5e5'
+                }
+            },
+            grid: {
+                borderColor: '#555',
+                row: {
+                    colors: ['transparent'],
+                    opacity: 0.5
+                }
+            },
+            markers: {
+                size: 1
+            },
+            xaxis: {
+                categories: {{CATEGORIES}},
+                title: {
+                    text: 'Month',
+                    style: {
+                        color: '#e5e5e5'
+                    }
+                },
+                labels: {
+                    style: {
+                        colors: '#999'
+                    }
+                }
+            },
+            yaxis: {{Y_AXIS_CONFIG}},
+            legend: {
+                show: false
+            },
+            theme: {
+                mode: 'dark'
+            }
+        };
+
+        var chart = new ApexCharts(document.querySelector("#chart"), options);
+        chart.render();
+
+        // Track series visibility state
+        window.seriesVisibility = {{SERIES_VISIBILITY}};
+
+        // Custom legend toggle functionality - make it global
+        window.toggleSeries = function(seriesName) {
+            console.log('Toggling series:', seriesName);
+
+            try {
+                // Update our visibility state
+                window.seriesVisibility[seriesName] = !window.seriesVisibility[seriesName];
+
+                // Show or hide the series using explicit methods
+                if (window.seriesVisibility[seriesName]) {
+                    chart.showSeries(seriesName);
+                } else {
+                    chart.hideSeries(seriesName);
+                }
+
+                // Toggle the visual state of the legend item
+                const legendItem = document.querySelector(`[data-series="${seriesName}"]`);
+                if (legendItem) {
+                    if (window.seriesVisibility[seriesName]) {
+                        legendItem.classList.remove('inactive');
+                    } else {
+                        legendItem.classList.add('inactive');
+                    }
+                }
+
+                console.log('Series visibility:', window.seriesVisibility);
+            } catch (error) {
+                console.error('Error toggling series:', error);
+            }
+        };
+
+        // Date range and aggregation functionality
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+        const aggregationButtons = document.querySelectorAll('[data-aggregation]');
+        const originalCategories = {{CATEGORIES}};
+        const originalSeries = {{ORIGINAL_SERIES}};
+
+        // Store original data
+        const originalData = originalCategories.map((category, index) => {
+            const dataPoint = { date: category };
+            originalSeries.forEach(serie => {
+                dataPoint[serie.name] = serie.data[index] || 0;
+            });
+            return dataPoint;
+        });
+
+        let currentAggregation = 'month';
+
+        // Initialize date pickers with data range
+        const allDates = originalCategories.map(cat => new Date(cat)).sort((a, b) => a - b);
+        const minDate = allDates[0];
+        const maxDate = new Date(); // Use current date instead of last data point
+
+        startDateInput.value = minDate.toISOString().split('T')[0];
+        endDateInput.value = maxDate.toISOString().split('T')[0];
+        startDateInput.min = minDate.toISOString().split('T')[0];
+        startDateInput.max = maxDate.toISOString().split('T')[0];
+        endDateInput.min = minDate.toISOString().split('T')[0];
+        endDateInput.max = maxDate.toISOString().split('T')[0];
+
+        function filterDataByDateRange(data) {
+            const startDate = new Date(startDateInput.value);
+            const endDate = new Date(endDateInput.value);
+
+            return data.filter(item => {
+                const itemDate = new Date(item.date);
+                return itemDate >= startDate && itemDate <= endDate;
+            });
+        }
+
+        function resetDateRange() {
+            startDateInput.value = minDate.toISOString().split('T')[0];
+            endDateInput.value = maxDate.toISOString().split('T')[0];
+            updateChart();
+        }
+
+        function aggregateData(data, level) {
+            const aggregated = {};
+
+            data.forEach(item => {
+                let key;
+                const date = new Date(item.date);
+
+                if (level === 'day') {
+                    key = item.date;
+                } else if (level === 'week') {
+                    const startOfWeek = new Date(date);
+                    startOfWeek.setDate(date.getDate() - date.getDay());
+                    key = startOfWeek.toISOString().split('T')[0];
+                } else if (level === 'month') {
+                    key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+                }
+
+                if (!aggregated[key]) {
+                    aggregated[key] = {};
+                    originalSeries.forEach(serie => {
+                        aggregated[key][serie.name] = 0;
+                    });
+                }
+
+                originalSeries.forEach(serie => {
+                    aggregated[key][serie.name] += item[serie.name] || 0;
+                });
+            });
+
+            const sortedKeys = Object.keys(aggregated).sort();
+            const categories = sortedKeys.map(key => {
+                if (level === 'week') {
+                    return 'Week of ' + new Date(key).toLocaleDateString();
+                } else if (level === 'month') {
+                    const [year, month] = key.split('-');
+                    return new Date(year, month - 1).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+                } else {
+                    const d = new Date(key);
+                    return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear().toString().substr(-2)}`;
+                }
+            });
+
+            const series = originalSeries.map(serie => ({
+                ...serie,
+                data: sortedKeys.map(key => aggregated[key][serie.name])
+            }));
+
+            return { categories, series };
+        }
+
+        function updateChart() {
+            const filteredData = filterDataByDateRange(originalData);
+            const aggregatedData = aggregateData(filteredData, currentAggregation);
+
+            chart.updateOptions({
+                xaxis: {
+                    categories: aggregatedData.categories
+                },
+                series: aggregatedData.series
+            }, true);
+        }
+
+        // Date picker event handlers
+        startDateInput.addEventListener('change', updateChart);
+        endDateInput.addEventListener('change', updateChart);
+
+        // Aggregation button handlers
+        aggregationButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                aggregationButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                currentAggregation = this.dataset.aggregation;
+                updateChart();
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,417 @@
+{
+  "_meta": {
+    "name": "LocalBase.ai Master Schema",
+    "description": "Complete data structure documentation for LocalBase.ai - open source sales & lead gen stack built around QuickBooks",
+    "version": "2.0",
+    "last_updated": "2025-09-29",
+    "architecture": "Unified CRM with leads → proposals → customers funnel",
+    "terminology": {
+      "leads": "Pre-pitch contacts (relationship_type='lead')",
+      "deals": "Actual proposals sent (relationship_type='proposal')",
+      "customers": "Invoiced contacts (QuickBooks)"
+    }
+  },
+  "databases": {
+    "localbase.db": {
+      "description": "CRM Master Database - Single source of truth for customer identities and relationships",
+      "tables": {
+        "customers": {
+          "description": "Master customer identity table - unified across all systems. Now includes alternate_email and alternate_phone fields",
+          "row_count": 927,
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "Primary key, auto-incrementing customer ID"
+            },
+            "email": {
+              "type": "string",
+              "description": "Customer email address (unique when present)"
+            },
+            "phone": {
+              "type": "string",
+              "description": "Customer phone number"
+            },
+            "first_name": {
+              "type": "string",
+              "description": "Customer first name"
+            },
+            "last_name": {
+              "type": "string",
+              "description": "Customer last name"
+            },
+            "primary_address": {
+              "type": "string",
+              "description": "Customer's primary property address"
+            },
+            "created_at": {
+              "type": "datetime",
+              "description": "When customer record was created"
+            },
+            "updated_at": {
+              "type": "datetime",
+              "description": "Last update timestamp"
+            },
+            "alternate_email": {
+              "type": "string",
+              "description": "Secondary email address for customers with multiple contacts"
+            },
+            "alternate_phone": {
+              "type": "string",
+              "description": "Secondary phone number for customers with multiple contacts"
+            }
+          }
+        },
+        "customer_relationships": {
+          "description": "Links customers to all external systems - flexible JSON metadata. Contains leads, proposals, and financial relationships",
+          "row_count": 1187,
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "Primary key for relationship"
+            },
+            "customer_id": {
+              "type": "integer",
+              "description": "Foreign key to customers table"
+            },
+            "source_system": {
+              "type": "string",
+              "description": "External system name (roofr, roofmaxx, quickbooks, gmail)",
+              "common_values": ["roofr", "roofmaxx", "quickbooks", "gmail"]
+            },
+            "source_id": {
+              "type": "string",
+              "description": "ID in the source system"
+            },
+            "relationship_type": {
+              "type": "string",
+              "description": "Type of relationship - 'lead' for pre-pitch contacts, 'proposal' for actual deals",
+              "common_values": ["lead", "appointment", "proposal", "customer", "invoice", "payment"]
+            },
+            "lead_channel": {
+              "type": "string",
+              "description": "Lead generation channel (for RoofMaxx leads) - extracted from dealtype",
+              "common_values": ["NAP", "NAP-L", "NAP-S", "RMCL", "GRML", "SG", "MICRO", "DDSM", "ASP"]
+            },
+            "status": {
+              "type": "string",
+              "description": "Current status of the relationship"
+            },
+            "amount": {
+              "type": "decimal",
+              "description": "Dollar amount if applicable"
+            },
+            "date_created": {
+              "type": "datetime",
+              "description": "When relationship was created in source system"
+            },
+            "metadata": {
+              "type": "json",
+              "description": "Flexible JSON field for system-specific data. For RoofMaxx leads, contains raw_data with HubSpot contact info"
+            }
+          }
+        },
+        "customer_activities": {
+          "description": "Audit trail of all customer interactions across systems",
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "Primary key for activity"
+            },
+            "customer_id": {
+              "type": "integer",
+              "description": "Foreign key to customers table"
+            },
+            "activity_type": {
+              "type": "string",
+              "description": "Type of activity",
+              "common_values": ["appointment_scheduled", "proposal_sent", "deal_created", "payment_received"]
+            },
+            "description": {
+              "type": "text",
+              "description": "Human-readable description of the activity"
+            },
+            "source_system": {
+              "type": "string",
+              "description": "System that generated this activity"
+            },
+            "occurred_at": {
+              "type": "datetime",
+              "description": "When the activity occurred"
+            },
+            "metadata": {
+              "type": "json",
+              "description": "Additional activity details"
+            }
+          }
+        }
+      }
+    },
+    "roofr/appointments.db": {
+      "description": "Roofr appointment scheduling data from Gmail sync",
+      "tables": {
+        "appointments": {
+          "row_count": 90,
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "Primary key"
+            },
+            "roofr_job_id": {
+              "type": "string",
+              "description": "Roofr job identifier"
+            },
+            "property_address": {
+              "type": "string",
+              "description": "Property address for the appointment"
+            },
+            "customer_name": {
+              "type": "string",
+              "description": "Customer name (often NULL, extracted from email)"
+            },
+            "customer_phone": {
+              "type": "string",
+              "description": "Customer phone (often NULL)"
+            },
+            "customer_email": {
+              "type": "string",
+              "description": "Customer email (often NULL)"
+            },
+            "appointment_date": {
+              "type": "string",
+              "description": "Appointment date (e.g., 'Fri August 29')"
+            },
+            "appointment_time": {
+              "type": "string",
+              "description": "Appointment time range"
+            },
+            "appointment_type": {
+              "type": "string",
+              "description": "Type of appointment (e.g., 'Sales appointment')"
+            },
+            "raw_email_data": {
+              "type": "text",
+              "description": "Raw HTML email content containing customer info"
+            },
+            "gmail_message_id": {
+              "type": "string",
+              "description": "Gmail message identifier"
+            }
+          }
+        }
+      }
+    },
+    "roofr/roofr_proposals.db": {
+      "description": "Roofr proposal data from Zapier webhooks",
+      "tables": {
+        "proposals": {
+          "row_count": 125,
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "Primary key"
+            },
+            "roofr_proposal_id": {
+              "type": "string",
+              "description": "Roofr proposal identifier"
+            },
+            "customer_email": {
+              "type": "string",
+              "description": "Customer email address"
+            },
+            "customer_phone": {
+              "type": "string",
+              "description": "Customer phone number"
+            },
+            "customer_full_name": {
+              "type": "string",
+              "description": "Customer full name"
+            },
+            "property_address": {
+              "type": "string",
+              "description": "Property address"
+            },
+            "proposal_status": {
+              "type": "string",
+              "description": "Proposal status (sent, signed, etc.)"
+            },
+            "proposal_amount": {
+              "type": "decimal",
+              "description": "Proposal dollar amount"
+            },
+            "sent_date": {
+              "type": "datetime",
+              "description": "When proposal was sent"
+            },
+            "signed_date": {
+              "type": "datetime",
+              "description": "When proposal was signed"
+            }
+          }
+        }
+      }
+    },
+    "roofmaxx_deals/roofmaxx_deals.db": {
+      "description": "[LEGACY] RoofMaxx CRM data - now integrated into localbase.db as 'leads'. Contains raw contact data that was extracted.",
+      "tables": {
+        "deals": {
+          "description": "[LEGACY] This data is now in localbase.db customer_relationships as relationship_type='lead'",
+          "row_count": 984,
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "Unique deal identifier"
+            },
+            "customer_name": {
+              "type": "string",
+              "description": "Customer full name"
+            },
+            "customer_email": {
+              "type": "string",
+              "description": "Customer email address"
+            },
+            "customer_phone": {
+              "type": "string",
+              "description": "Customer phone number"
+            },
+            "property_address": {
+              "type": "string",
+              "description": "Property address"
+            },
+            "dealType": {
+              "type": "string",
+              "business_meaning": "lead_channel",
+              "description": "[MIGRATED] Lead generation channel - now extracted to lead_channel field in localbase.db",
+              "common_values": ["NAP", "NAP-L", "NAP-S", "RMCL", "GRML", "SG", "MICRO", "DDSM", "ASP"]
+            },
+            "created_at": {
+              "type": "datetime",
+              "business_meaning": "lead_date",
+              "description": "[MIGRATED] When the lead was created - now in localbase.db customer_relationships"
+            },
+            "status": {
+              "type": "string",
+              "description": "Current deal status"
+            }
+          }
+        }
+      }
+    },
+    "quickbooks/quickbooks.db": {
+      "description": "QuickBooks financial data",
+      "tables": {
+        "customers": {
+          "row_count": 816,
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "QuickBooks customer ID"
+            },
+            "company_name": {
+              "type": "string",
+              "description": "Company/customer name"
+            },
+            "given_name": {
+              "type": "string",
+              "description": "Customer first name"
+            },
+            "family_name": {
+              "type": "string",
+              "description": "Customer last name"
+            },
+            "primary_email": {
+              "type": "string",
+              "description": "Primary email address"
+            },
+            "primary_phone": {
+              "type": "string",
+              "description": "Primary phone number"
+            }
+          }
+        },
+        "invoices": {
+          "row_count": 111,
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "Invoice ID"
+            },
+            "customer_id": {
+              "type": "integer",
+              "description": "QuickBooks customer ID"
+            },
+            "total_amount": {
+              "type": "decimal",
+              "description": "Invoice total amount"
+            },
+            "txn_date": {
+              "type": "date",
+              "description": "Transaction date"
+            }
+          }
+        },
+        "payments": {
+          "row_count": 118,
+          "columns": {
+            "id": {
+              "type": "integer",
+              "description": "Payment ID"
+            },
+            "customer_id": {
+              "type": "integer",
+              "description": "QuickBooks customer ID"
+            },
+            "total_amount": {
+              "type": "decimal",
+              "description": "Payment amount"
+            },
+            "txn_date": {
+              "type": "date",
+              "description": "Transaction date"
+            }
+          }
+        }
+      }
+    }
+  },
+  "business_context": {
+    "lead_terminology": {
+      "leads": "Pre-pitch contacts from RoofMaxx (relationship_type='lead')",
+      "deals": "Actual proposals sent via Roofr (relationship_type='proposal')",
+      "customers": "Invoiced contacts in QuickBooks (relationship_type='customer')"
+    },
+    "lead_channels": "RoofMaxx dealtype values now in lead_channel field",
+    "pitch_rate": "954 leads → 125 proposals = 13.1% conversion",
+    "common_time_periods": {
+      "august": "WHERE created_at >= '2025-08-01' AND created_at < '2025-09-01'",
+      "last_30_days": "WHERE created_at >= date('now', '-30 days')",
+      "this_year": "WHERE created_at >= '2025-01-01'",
+      "this_month": "WHERE created_at >= date('now', 'start of month')"
+    }
+  },
+  "chart_templates": {
+    "lead_channels": {
+      "type": "pie",
+      "database": "localbase.db",
+      "query": "SELECT lead_channel as channel, COUNT(*) as count FROM customer_relationships WHERE source_system='roofmaxx' AND relationship_type='lead' {time_filter} GROUP BY lead_channel ORDER BY count DESC",
+      "description": "Distribution of leads by channel (NAP, RMCL, etc.)"
+    },
+    "monthly_leads": {
+      "type": "line",
+      "database": "localbase.db",
+      "query": "SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as leads FROM customer_relationships WHERE source_system='roofmaxx' AND relationship_type='lead' AND created_at >= '2025-01-01' GROUP BY month ORDER BY month",
+      "description": "Monthly lead volume trend"
+    },
+    "sales_funnel": {
+      "type": "bar",
+      "database": "localbase.db",
+      "query": "SELECT relationship_type, COUNT(*) as count FROM customer_relationships WHERE source_system IN ('roofmaxx', 'roofr', 'quickbooks') GROUP BY relationship_type ORDER BY CASE relationship_type WHEN 'lead' THEN 1 WHEN 'proposal' THEN 2 WHEN 'customer' THEN 3 END",
+      "description": "Sales funnel: Leads → Proposals → Customers"
+    },
+    "pitch_rate_by_channel": {
+      "type": "bar",
+      "database": "localbase.db",
+      "query": "WITH lead_counts AS (SELECT c.id, cr1.lead_channel FROM customers c JOIN customer_relationships cr1 ON c.id = cr1.customer_id WHERE cr1.source_system='roofmaxx' AND cr1.relationship_type='lead'), proposal_counts AS (SELECT c.id, lr.lead_channel FROM customers c JOIN customer_relationships cr2 ON c.id = cr2.customer_id JOIN lead_counts lr ON c.id = lr.id WHERE cr2.relationship_type='proposal') SELECT lc.lead_channel, COUNT(lc.id) as leads, COUNT(pc.id) as proposals, ROUND(COUNT(pc.id) * 100.0 / COUNT(lc.id), 1) as pitch_rate FROM lead_counts lc LEFT JOIN proposal_counts pc ON lc.id = pc.id GROUP BY lc.lead_channel ORDER BY leads DESC",
+      "description": "Pitch rate (leads to proposals) by channel"
+    }
+  }
+}

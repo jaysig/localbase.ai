@@ -1,0 +1,47 @@
+{
+  "name": "localbase",
+  "version": "1.0.0",
+  "description": "LocalBase",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/server/app-server.js",
+    "mcp": "node tools/mcp/server.js",
+    "dev": "node --watch tools/server/app-server.js",
+    "update-g2": "node connectors/g2-api/update.js",
+    "update-deals": "node connectors/hubspot/update.js",
+    "test": "node --test test/**/*.test.js",
+    "test:watch": "node --test --watch test/**/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "@observablehq/plot": "^0.6.17",
+    "axios": "^1.6.0",
+    "better-sqlite3": "^12.2.0",
+    "chart.js": "^4.5.0",
+    "chartjs-chart-venn": "^4.3.5",
+    "claude-story": "^1.4.2",
+    "cors": "^2.8.5",
+    "csv-parse": "^6.1.0",
+    "csv-parser": "^3.2.0",
+    "d3": "^7.9.0",
+    "dotenv": "^16.3.0",
+    "express": "^5.1.0",
+    "googleapis": "^160.0.0",
+    "highcharts": "^12.4.0",
+    "open": "^10.2.0",
+    "playwright": "^1.55.0",
+    "plotly.js-dist-min": "^3.1.0",
+    "sqlite3": "^5.1.7",
+    "tesseract.js": "^6.0.1",
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
+  },
+  "keywords": [
+    "mixpanel",
+    "analytics",
+    "insights",
+    "localbase"
+  ],
+  "author": "Ryan",
+  "license": "MIT"
+}

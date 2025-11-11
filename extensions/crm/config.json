@@ -1,0 +1,20 @@
+{
+  "name": "CRM",
+  "description": "Customer Relationship Management - Sales pipeline and customer tracking",
+  "version": "1.0.0",
+  "presentation": "sidebar",
+  "routes": [
+    {
+      "id": "pipeline",
+      "label": "Pipeline",
+      "icon": "DollarSign",
+      "component": "Pipeline.jsx"
+    },
+    {
+      "id": "customers",
+      "label": "Customers",
+      "icon": "Users",
+      "component": "Customers.jsx"
+    }
+  ]
+}
