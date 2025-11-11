@@ -37,6 +37,16 @@ if [ -d "$FRAMEWORK_DIR/web-app" ]; then
     $FRAMEWORK_DIR/web-app/ $INSTANCE_DIR/web-app/
 fi
 
+# Sync scripts (except sync-framework.sh which must stay instance-local)
+if [ -d "$FRAMEWORK_DIR/scripts" ]; then
+  echo "📜 Syncing scripts..."
+  mkdir -p $INSTANCE_DIR/scripts
+  rsync -av \
+    --exclude 'sync-framework.sh' \
+    --exclude '.DS_Store' \
+    $FRAMEWORK_DIR/scripts/ $INSTANCE_DIR/scripts/
+fi
+
 echo ""
 echo "✅ Framework sync complete!"
 echo ""
