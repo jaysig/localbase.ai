@@ -13,15 +13,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from app directory
-app.use('/static', express.static('app'));
-app.use('/viz', express.static('app/viz'));
-app.use('/assets', express.static('app/assets'));
+// Serve static files from web-app directory
+app.use('/static', express.static('web-app'));
+app.use('/viz', express.static('web-app/viz'));
+app.use('/assets', express.static('web-app/assets'));
 app.use('/node_modules', express.static('node_modules'));
 
 // Main dashboard route
 app.get('/', (req, res) => {
-  const indexPath = join(__dirname, 'app', 'index.html');
+  const indexPath = join(__dirname, 'web-app', 'index.html');
   if (existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
@@ -32,7 +32,7 @@ app.get('/', (req, res) => {
 // Individual visualization routes
 app.get('/viz/:chartId', (req, res) => {
   const chartId = req.params.chartId;
-  const chartPath = join(__dirname, 'app', 'viz', `${chartId}.html`);
+  const chartPath = join(__dirname, 'web-app', 'viz', `${chartId}.html`);
 
   if (existsSync(chartPath)) {
     res.sendFile(chartPath);
@@ -43,7 +43,7 @@ app.get('/viz/:chartId', (req, res) => {
 
 // API route for visualization listings
 app.get('/api/visualizations', (req, res) => {
-  const registryPath = join(__dirname, 'app', 'assets', 'visualizations.json');
+  const registryPath = join(__dirname, 'web-app', 'assets', 'visualizations.json');
 
   if (existsSync(registryPath)) {
     try {
@@ -111,8 +111,8 @@ app.get('/api/media-correlation/roas', async (req, res) => {
 // DELETE endpoint for visualization removal
 app.delete('/api/viz/:id', (req, res) => {
   const { id } = req.params;
-  const registryPath = join(__dirname, 'app', 'assets', 'visualizations.json');
-  const vizPath = join(__dirname, 'app', 'viz', `${id}.html`);
+  const registryPath = join(__dirname, 'web-app', 'assets', 'visualizations.json');
+  const vizPath = join(__dirname, 'web-app', 'viz', `${id}.html`);
 
   console.log(`🗑️ Delete request for viz ID: ${id}`);
 

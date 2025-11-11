@@ -195,14 +195,14 @@ app.whenReady().then(async () => {
       // Handle API visualization requests (e.g., api/viz/mvrq803bx)
       if (urlPath.startsWith('api/viz/')) {
         const vizId = urlPath.replace('api/viz/', '')
-        const registryPath = path.join(currentProjectRoot, 'app/assets/visualizations.json')
+        const registryPath = path.join(currentProjectRoot, 'web-app/assets/visualizations.json')
 
         if (existsSync(registryPath)) {
           const registry = JSON.parse(readFileSync(registryPath, 'utf-8'))
           const viz = registry.visualizations?.find(v => v.id === vizId)
 
           if (viz && viz.filename) {
-            filePath = path.join(currentProjectRoot, 'app/viz', viz.filename)
+            filePath = path.join(currentProjectRoot, 'web-app/viz', viz.filename)
           }
         }
       }
@@ -210,16 +210,16 @@ app.whenReady().then(async () => {
       else if (urlPath.startsWith('viz/')) {
         // Check if this is a viz asset request (viz/assets/...)
         if (urlPath.startsWith('viz/assets/')) {
-          // Strip 'viz/' and map to app/assets/
-          filePath = path.join(currentProjectRoot, 'app', urlPath.replace('viz/', ''))
+          // Strip 'viz/' and map to web-app/assets/
+          filePath = path.join(currentProjectRoot, 'web-app', urlPath.replace('viz/', ''))
         } else {
           // Regular viz file
-          filePath = path.join(currentProjectRoot, 'app', urlPath)
+          filePath = path.join(currentProjectRoot, 'web-app', urlPath)
         }
       }
-      // Handle asset requests (e.g., assets/sql-wasm.js from app pages)
+      // Handle asset requests (e.g., assets/sql-wasm.js from web-app pages)
       else if (urlPath.startsWith('assets/')) {
-        filePath = path.join(currentProjectRoot, 'app', urlPath)
+        filePath = path.join(currentProjectRoot, 'web-app', urlPath)
       }
       // Handle any other paths as-is
       else {

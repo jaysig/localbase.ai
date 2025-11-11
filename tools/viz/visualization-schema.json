@@ -2,8 +2,8 @@
   "system": "unified_viz_factory",
   "description": "Consolidated visualization creation system using ApexCharts and Chart.js",
   "location": "lib/viz/index.js",
-  "registry": "app/assets/visualizations.json",
-  "output_directory": "app/viz/",
+  "registry": "web-app/assets/visualizations.json",
+  "output_directory": "web-app/viz/",
   "factory_api": {
     "import": "import { VizFactory } from './lib/viz/index.js'",
     "initialization": "const factory = new VizFactory()"

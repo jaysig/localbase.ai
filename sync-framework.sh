@@ -27,14 +27,14 @@ rsync -av \
   --exclude '.DS_Store' \
   $FRAMEWORK_DIR/tools/ $INSTANCE_DIR/tools/
 
-# Sync app framework (if exists)
-if [ -d "$FRAMEWORK_DIR/app" ]; then
-  echo "🎨 Syncing app..."
+# Sync web-app framework (if exists)
+if [ -d "$FRAMEWORK_DIR/web-app" ]; then
+  echo "🎨 Syncing web-app..."
   rsync -av \
     --exclude 'viz/*.html' \
     --exclude 'assets/visualizations.json' \
     --exclude '.DS_Store' \
-    $FRAMEWORK_DIR/app/ $INSTANCE_DIR/app/
+    $FRAMEWORK_DIR/web-app/ $INSTANCE_DIR/web-app/
 fi
 
 echo ""
@@ -49,7 +49,7 @@ echo "   - connectors/ (business-specific data connectors)"
 echo "   - extensions/ (business-specific tools like CRM, MediaTrader)"
 echo "   - data/ (business-specific databases)"
 echo "   - env.local (instance-specific credentials)"
-echo "   - app/assets/visualizations.json (instance-specific viz registry)"
+echo "   - web-app/assets/visualizations.json (instance-specific viz registry)"
 echo ""
 echo "📋 Next steps:"
 echo "   1. Install deps (if needed): cd electron-app && npm install"

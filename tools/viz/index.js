@@ -13,7 +13,7 @@ import { join } from 'path';
 
 export class VizFactory {
   constructor(options = {}) {
-    this.baseDir = options.baseDir || 'app';
+    this.baseDir = options.baseDir || 'web-app';
     this.vizDir = join(this.baseDir, 'viz');
     this.registry = new VizRegistry(this.baseDir);
 

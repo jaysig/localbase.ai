@@ -117,7 +117,7 @@ LocalBase.ai is the **core framework**. Renu and GoSkills are **instances** (sep
 
 **What goes in core (localbase.ai):**
 - `tools/` - Framework libraries (viz, mcp, server, ocr, surge)
-- `app/` - Web dashboard UI
+- `web-app/` - Web dashboard UI
 - `electron-app/` - Desktop app
 - `connectors/base.js` and `connectors/example/` - Connector framework
 
@@ -219,7 +219,7 @@ Each connector provides MCP tools for Claude Code integration and stores data in
    - Generator: `const { generateMultilineChart } = require('./tools/generate-multiline-chart.js')`
    - Template: `tools/templates/multiline-chart-template.html` (based on successful business metrics chart)
    - Features: Interactive legend, date filters, day/week/month aggregation, dual Y-axis support
-   - Auto-registers in `app/assets/visualizations.json` with unique IDs
+   - Auto-registers in `web-app/assets/visualizations.json` with unique IDs
    - **INSTANT GENERATION**: One function call creates complete, fully-featured chart
    - **REPLACES**: Old VizFactory complexity - this is now the standard method
 
@@ -231,20 +231,20 @@ Each connector provides MCP tools for Claude Code integration and stores data in
    - Tab is automatically created with visualization name (e.g., "✨ long-term-deals-trends")
    - Users can click visualization cards to load them embedded or close embedded view with × button
    - **IMPORTANT**: When viewing embedded visualization via tab click, hide the entire visualization grid and show only the new visualization (focused view)
-   - Visualization URLs use `/app/viz/` path structure
+   - Visualization URLs use `/web-app/viz/` path structure
 
 ## Server Management
 5. **Simple server operation**
    - `npm start` - Start Express web server (port 3000)
    - `npm run mcp` - Start MCP server (stdio for Claude Code)
    - `npm run dev` - Development server with auto-restart
-   - Web server serves from app/ directory with Express.js backend
+   - Web server serves from web-app/ directory with Express.js backend
 
 ## Architecture
 6. **LocalBase Structure**
    - `tools/` - Framework libraries (viz, mcp, server, ocr, surge)
    - `connectors/` - Unified Node.js data connectors (gmail, roofr, roofmaxx, quickbooks)
-   - `app/` - Web visualization dashboard (viz, assets, index.html)
+   - `web-app/` - Web visualization dashboard (viz, assets, index.html)
    - `data/` - Local SQLite databases
    - Each connector extends `BaseConnector` and provides MCP tools
 
@@ -307,9 +307,9 @@ Each connector provides MCP tools for Claude Code integration and stores data in
    - **Series Generation**: Create one series per individual event, but color by category
    - **Legend Format**: `● Event Name` with category color, no category labels (obvious grouping)
    - **Stats Summary**: Calculate totals by event type and show top 5 events
-   - **File Location**: Save to `/app/viz/` with descriptive filename
+   - **File Location**: Save to `/web-app/viz/` with descriptive filename
    - **ApexCharts Config**: horizontal bar, stacked: true, 1500px height, custom legend disabled
-   - **CRITICAL**: ALWAYS register in `/app/assets/visualizations.json` with unique ID, filename, title, type: "chart", library: "apexcharts", URL, size, and timestamps
+   - **CRITICAL**: ALWAYS register in `/web-app/assets/visualizations.json` with unique ID, filename, title, type: "chart", library: "apexcharts", URL, size, and timestamps
 
 ## Table Visualizations
 17. **Simple Table Viz**: When user asks for a table visualization
@@ -324,7 +324,7 @@ Each connector provides MCP tools for Claude Code integration and stores data in
    - **When to use**: Single charts with custom filters, grouped columns, revenue data
    - **Approach**: Direct HTML + ApexCharts + database query script
    - **Benefits**: Full control, custom interactions, no VizFactory routing complexity
-   - **Registry**: Manually add to `app/assets/visualizations.json` with proper metadata
+   - **Registry**: Manually add to `web-app/assets/visualizations.json` with proper metadata
    - **Template**: Dark theme styling, proper chart dimensions (600px height), responsive design
 
 19. **VizFactory vs Simple Chart Decision Matrix**
@@ -337,7 +337,7 @@ Each connector provides MCP tools for Claude Code integration and stores data in
 
    **Prerequisites:**
    - Install chartjs-chart-venn package: `npm install chartjs-chart-venn`
-   - Copy plugin to assets: `cp node_modules/chartjs-chart-venn/build/index.umd.js app/assets/chartjs-chart-venn.js`
+   - Copy plugin to assets: `cp node_modules/chartjs-chart-venn/build/index.umd.js web-app/assets/chartjs-chart-venn.js`
    - Add to main dashboard: `<script src="/assets/chartjs-chart-venn.js"></script>`
 
    **Data Structure (Critical):**

@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, unlinkSync, statSync } from 'fs';
 import { join } from 'path';
 
 export class VizRegistry {
-  constructor(outputDir = 'app') {
+  constructor(outputDir = 'web-app') {
     this.outputDir = outputDir;
     this.registryPath = join(outputDir, 'assets', 'visualizations.json');
     this.workspace = this.detectWorkspace();

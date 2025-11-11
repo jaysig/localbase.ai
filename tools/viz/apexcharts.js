@@ -10,7 +10,7 @@ import { ModernDashboardTemplate } from '../templates/modern-dashboard.js';
 
 export class ApexChartsService {
   constructor(options = {}) {
-    this.outputDir = options.outputDir || 'app';
+    this.outputDir = options.outputDir || 'web-app';
     this.width = options.width || 1400;
     this.height = options.height || 600;
   }

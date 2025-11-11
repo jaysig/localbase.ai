@@ -8,7 +8,7 @@ import { join } from 'path';
 
 export class ApexGridService {
   constructor(options = {}) {
-    this.outputDir = options.outputDir || 'app/viz';
+    this.outputDir = options.outputDir || 'web-app/viz';
   }
 
   /**

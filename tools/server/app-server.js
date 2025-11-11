@@ -29,7 +29,7 @@ const PORT = 3000;
 
 // Get current workspace from persistent config
 let currentWorkspace = getCurrentWorkspace();
-let appDir = join(currentWorkspace, 'app');
+let appDir = join(currentWorkspace, 'web-app');
 
 // Middleware
 app.use(cors());
@@ -48,7 +48,7 @@ console.log(`📁 Registry path: ${registry.registryPath}`);
  */
 function switchWorkspace(workspacePath) {
   currentWorkspace = workspacePath;
-  appDir = join(currentWorkspace, 'app');
+  appDir = join(currentWorkspace, 'web-app');
 
   // Re-initialize registry and business funnel API
   registry = new VizRegistry(appDir);
@@ -653,11 +653,11 @@ app.post('/api/workspace/switch', (req, res) => {
     }
 
     // Validate workspace exists
-    const vizJsonPath = join(workspacePath, 'app', 'assets', 'visualizations.json');
+    const vizJsonPath = join(workspacePath, 'web-app', 'assets', 'visualizations.json');
     if (!existsSync(vizJsonPath)) {
       return res.status(404).json({
         success: false,
-        error: 'Invalid workspace: app/assets/visualizations.json not found'
+        error: 'Invalid workspace: web-app/assets/visualizations.json not found'
       });
     }
 

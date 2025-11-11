@@ -30,7 +30,7 @@ These files are unique to each instance and should **never** be synced from the 
 | `connectors/` | Business-specific data connectors | QuickBooks, HubSpot, G2, etc. |
 | `data/` | Business-specific SQLite databases | Customer data, deals, metrics |
 | `env.local` | Instance-specific API credentials | Never committed, never shared |
-| `app/assets/visualizations.json` | Instance-specific visualization registry | Business dashboards |
+| `web-app/assets/visualizations.json` | Instance-specific visualization registry | Business dashboards |
 
 ### ⚙️ Framework Files (SYNCED FROM FRAMEWORK)
 
