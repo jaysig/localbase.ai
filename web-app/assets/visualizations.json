@@ -1,5 +1,20 @@
 {
-  "visualizations": [],
+  "visualizations": [
+    {
+      "id": "framework-stats-1762893680140",
+      "filename": "framework-stats.html",
+      "title": "LocalBase.ai Framework Stats",
+      "type": "chart",
+      "library": "apexcharts",
+      "url": "web-app/viz/framework-stats.html",
+      "size": "medium",
+      "date": "2025-11-11T20:41:20.140Z",
+      "createdAt": "2025-11-11T20:41:20.141Z",
+      "workspace": "framework",
+      "views": 0,
+      "lastViewed": null
+    }
+  ],
   "lastUpdated": "2025-10-20T00:00:00.000Z",
-  "totalVisualizations": 0
+  "totalVisualizations": 1
 }

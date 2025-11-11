@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LocalBase.ai Framework Stats</title>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #ffc107;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 40px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    .stat-card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #ffc107;
+      margin-bottom: 5px;
+    }
+    .stat-label {
+      font-size: 14px;
+      color: #888;
+    }
+    .chart-container {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .chart-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 LocalBase.ai Framework Stats</h1>
+    <div class="subtitle">Repository Analysis - November 2025</div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">1.0 GB</div>
+        <div class="stat-label">Total Size</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">126</div>
+        <div class="stat-label">Total Files</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">59K</div>
+        <div class="stat-label">Lines of Code</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">69</div>
+        <div class="stat-label">JS/JSX Files</div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">Directory Size Breakdown</div>
+      <div id="sizeChart"></div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">File Type Distribution</div>
+      <div id="filesChart"></div>
+    </div>
+  </div>
+
+  <script>
+    // Size breakdown chart
+    const sizeOptions = {
+      series: [{
+        name: 'Size (MB)',
+        data: [668, 4.8, 0.3, 0.024]
+      }],
+      chart: {
+        type: 'bar',
+        height: 350,
+        background: 'transparent',
+        toolbar: { show: false }
+      },
+      plotOptions: {
+        bar: {
+          horizontal: true,
+          distributed: true,
+          borderRadius: 4,
+          dataLabels: {
+            position: 'top'
+          }
+        }
+      },
+      colors: ['#ffc107', '#f25022', '#1877f2', '#34a853'],
+      dataLabels: {
+        enabled: true,
+        formatter: function(val) {
+          return val >= 1 ? val.toFixed(1) + ' MB' : (val * 1024).toFixed(0) + ' KB';
+        },
+        style: {
+          fontSize: '12px',
+          colors: ['#fff']
+        }
+      },
+      xaxis: {
+        categories: ['electron-app', 'web-app', 'tools', 'connectors'],
+        labels: {
+          style: { colors: '#888' }
+        }
+      },
+      yaxis: {
+        labels: {
+          style: { colors: '#888' }
+        }
+      },
+      grid: {
+        borderColor: '#333',
+        strokeDashArray: 4
+      },
+      tooltip: {
+        theme: 'dark',
+        y: {
+          formatter: function(val) {
+            return val >= 1 ? val.toFixed(2) + ' MB' : (val * 1024).toFixed(0) + ' KB';
+          }
+        }
+      },
+      legend: { show: false }
+    };
+
+    // File type distribution
+    const filesOptions = {
+      series: [69, 12, 15, 4],
+      chart: {
+        type: 'donut',
+        height: 350,
+        background: 'transparent'
+      },
+      labels: ['JavaScript/JSX', 'JSON', 'Markdown', 'HTML'],
+      colors: ['#ffc107', '#f25022', '#1877f2', '#34a853'],
+      dataLabels: {
+        enabled: true,
+        style: {
+          fontSize: '14px',
+          colors: ['#fff']
+        }
+      },
+      legend: {
+        position: 'bottom',
+        labels: { colors: '#888' }
+      },
+      tooltip: {
+        theme: 'dark',
+        y: {
+          formatter: function(val) {
+            return val + ' files';
+          }
+        }
+      },
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '65%',
+            labels: {
+              show: true,
+              name: {
+                show: true,
+                color: '#888'
+              },
+              value: {
+                show: true,
+                fontSize: '32px',
+                fontWeight: 'bold',
+                color: '#ffc107',
+                formatter: function(val) {
+                  return val + ' files';
+                }
+              },
+              total: {
+                show: true,
+                label: 'Total Files',
+                color: '#888',
+                formatter: function(w) {
+                  return w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    // Render charts
+    const sizeChart = new ApexCharts(document.querySelector("#sizeChart"), sizeOptions);
+    sizeChart.render();
+
+    const filesChart = new ApexCharts(document.querySelector("#filesChart"), filesOptions);
+    filesChart.render();
+  </script>
+</body>
+</html>

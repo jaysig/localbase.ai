@@ -9,7 +9,6 @@ import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
-import { CompanyCamConnector } from '../../connectors/companycam/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -102,50 +101,6 @@ app.delete('/api/viz/:id', (req, res) => {
   } catch (error) {
     console.error('❌ Delete failed:', error);
     res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Company Cam address search endpoint
-app.get('/api/companycam/search', async (req, res) => {
-  const { address } = req.query;
-
-  if (!address) {
-    return res.status(400).json({ error: 'Address parameter required' });
-  }
-
-  try {
-    const connector = new CompanyCamConnector();
-    await connector.initialize();
-
-    const result = await connector.handleTool('companycam_search_projects', {
-      search: address,
-      per_page: 5
-    });
-
-    const data = JSON.parse(result.content[0].text);
-
-    if (data.projects && data.projects.length > 0) {
-      // Return the first match with public URL
-      const project = data.projects[0];
-      return res.json({
-        found: true,
-        project: {
-          address: project.address?.street_address_1,
-          city: project.address?.city,
-          state: project.address?.state,
-          url: project.public_url,
-          photo_count: project.photo_count
-        }
-      });
-    } else {
-      return res.json({
-        found: false,
-        message: 'No project found for this address'
-      });
-    }
-  } catch (error) {
-    console.error('Company Cam search error:', error);
-    res.status(500).json({ error: 'Search failed', details: error.message });
   }
 });
 
