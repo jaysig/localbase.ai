@@ -700,13 +700,28 @@ ipcMain.handle('workspace:getActive', async () => {
 ipcMain.handle('api:getVisualizations', async () => {
   try {
     console.log('📊 getVisualizations: Reading from workspace:', currentProjectRoot)
-    const vizRegistryPath = path.join(currentProjectRoot, 'app', 'assets', 'visualizations.json')
+
+    // Check which directory structure exists (web-app/ or app/)
+    const webAppRegistry = path.join(currentProjectRoot, 'web-app', 'assets', 'visualizations.json')
+    const appRegistry = path.join(currentProjectRoot, 'app', 'assets', 'visualizations.json')
+
+    let vizRegistryPath
+    try {
+      await fs.access(webAppRegistry)
+      vizRegistryPath = webAppRegistry
+      console.log('📊 Using web-app/ registry')
+    } catch {
+      vizRegistryPath = appRegistry
+      console.log('📊 Using app/ registry')
+    }
+
     const data = await fs.readFile(vizRegistryPath, 'utf-8')
     const registry = JSON.parse(data)
 
     // Detect workspace from path
     const workspace = currentProjectRoot.includes('/goskills') ? 'goskills'
       : currentProjectRoot.includes('/renu') ? 'renu'
+      : currentProjectRoot.includes('/my-workspace') ? 'my-workspace'
       : currentProjectRoot.includes('/localbase.ai') ? 'framework'
       : 'unknown'
 
