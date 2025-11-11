@@ -29,7 +29,15 @@ const PORT = 3000;
 
 // Get current workspace from persistent config
 let currentWorkspace = getCurrentWorkspace();
-let appDir = join(currentWorkspace, 'web-app');
+
+// Detect app directory (web-app/ for newer instances, app/ for older ones)
+function getAppDir(workspace) {
+  const webAppDir = join(workspace, 'web-app');
+  const appDir = join(workspace, 'app');
+  return existsSync(join(webAppDir, 'index.html')) ? webAppDir : appDir;
+}
+
+let appDir = getAppDir(currentWorkspace);
 
 // Middleware
 app.use(cors());
@@ -48,7 +56,7 @@ console.log(`📁 Registry path: ${registry.registryPath}`);
  */
 function switchWorkspace(workspacePath) {
   currentWorkspace = workspacePath;
-  appDir = join(currentWorkspace, 'web-app');
+  appDir = getAppDir(currentWorkspace);
 
   // Re-initialize registry and business funnel API
   registry = new VizRegistry(appDir);
@@ -652,12 +660,14 @@ app.post('/api/workspace/switch', (req, res) => {
       });
     }
 
-    // Validate workspace exists
-    const vizJsonPath = join(workspacePath, 'web-app', 'assets', 'visualizations.json');
-    if (!existsSync(vizJsonPath)) {
+    // Validate workspace exists (check both web-app/ and app/ directories)
+    const webAppVizPath = join(workspacePath, 'web-app', 'assets', 'visualizations.json');
+    const appVizPath = join(workspacePath, 'app', 'assets', 'visualizations.json');
+
+    if (!existsSync(webAppVizPath) && !existsSync(appVizPath)) {
       return res.status(404).json({
         success: false,
-        error: 'Invalid workspace: web-app/assets/visualizations.json not found'
+        error: 'Invalid workspace: visualizations.json not found in web-app/ or app/ directory'
       });
     }
 

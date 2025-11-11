@@ -12,7 +12,8 @@ import { homedir } from 'os';
 import cors from 'cors';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const projectRoot = join(__dirname, '..', '..');
+const defaultProjectRoot = join(__dirname, '..', '..');
+let currentWorkspace = defaultProjectRoot; // Track current workspace dynamically
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -55,15 +56,26 @@ function detectWorkspaces() {
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from web-app directory
-app.use('/static', express.static(join(projectRoot, 'web-app')));
-app.use('/viz', express.static(join(projectRoot, 'web-app/viz')));
-app.use('/assets', express.static(join(projectRoot, 'web-app/assets')));
-app.use('/node_modules', express.static(join(projectRoot, 'node_modules')));
+// Serve static files from web-app directory - dynamically based on current workspace
+app.use('/static', (req, res, next) => {
+  express.static(join(currentWorkspace, 'web-app'))(req, res, next);
+});
+
+app.use('/viz', (req, res, next) => {
+  express.static(join(currentWorkspace, 'web-app/viz'))(req, res, next);
+});
+
+app.use('/assets', (req, res, next) => {
+  express.static(join(currentWorkspace, 'web-app/assets'))(req, res, next);
+});
+
+app.use('/node_modules', (req, res, next) => {
+  express.static(join(currentWorkspace, 'node_modules'))(req, res, next);
+});
 
 // Main dashboard route
 app.get('/', (req, res) => {
-  const indexPath = join(projectRoot, 'web-app', 'index.html');
+  const indexPath = join(currentWorkspace, 'web-app', 'index.html');
   if (existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
@@ -74,7 +86,7 @@ app.get('/', (req, res) => {
 // Individual visualization routes
 app.get('/viz/:chartId', (req, res) => {
   const chartId = req.params.chartId;
-  const chartPath = join(projectRoot, 'web-app', 'viz', `${chartId}.html`);
+  const chartPath = join(currentWorkspace, 'web-app', 'viz', `${chartId}.html`);
 
   if (existsSync(chartPath)) {
     res.sendFile(chartPath);
@@ -89,7 +101,7 @@ app.get('/api/workspaces', (req, res) => {
     const allWorkspaces = detectWorkspaces();
     const workspacesWithActive = allWorkspaces.map(ws => ({
       ...ws,
-      active: ws.path === projectRoot
+      active: ws.path === currentWorkspace
     }));
 
     // Sort workspaces: my-workspace first, then alphabetically
@@ -102,7 +114,7 @@ app.get('/api/workspaces', (req, res) => {
     res.json({
       success: true,
       workspaces: sortedWorkspaces,
-      current: projectRoot
+      current: currentWorkspace
     });
   } catch (error) {
     console.error('Error listing workspaces:', error);
@@ -113,9 +125,51 @@ app.get('/api/workspaces', (req, res) => {
   }
 });
 
+// POST endpoint for workspace switching
+app.post('/api/workspace/switch', (req, res) => {
+  try {
+    const workspacePath = req.body.workspacePath || req.body.path;
+
+    if (!workspacePath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Workspace path is required'
+      });
+    }
+
+    // Verify the workspace exists and is valid
+    const webAppVizPath = join(workspacePath, 'web-app', 'assets', 'visualizations.json');
+    const appVizPath = join(workspacePath, 'app', 'assets', 'visualizations.json');
+
+    if (!existsSync(webAppVizPath) && !existsSync(appVizPath)) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invalid workspace - visualizations.json not found'
+      });
+    }
+
+    // Update the current workspace
+    currentWorkspace = workspacePath;
+    console.log(`✅ Workspace switched to: ${workspacePath}`);
+
+    res.json({
+      success: true,
+      message: `Switched to workspace: ${workspacePath}`,
+      workspace: workspacePath
+    });
+
+  } catch (error) {
+    console.error('❌ Workspace switch failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // API route for visualization listings
 app.get('/api/visualizations', (req, res) => {
-  const registryPath = join(projectRoot, 'web-app', 'assets', 'visualizations.json');
+  const registryPath = join(currentWorkspace, 'web-app', 'assets', 'visualizations.json');
 
   if (existsSync(registryPath)) {
     try {
@@ -132,8 +186,8 @@ app.get('/api/visualizations', (req, res) => {
 // DELETE endpoint for visualization removal
 app.delete('/api/viz/:id', (req, res) => {
   const { id } = req.params;
-  const registryPath = join(projectRoot, 'web-app', 'assets', 'visualizations.json');
-  const vizPath = join(projectRoot, 'web-app', 'viz', `${id}.html`);
+  const registryPath = join(currentWorkspace, 'web-app', 'assets', 'visualizations.json');
+  const vizPath = join(currentWorkspace, 'web-app', 'viz', `${id}.html`);
 
   console.log(`🗑️ Delete request for viz ID: ${id}`);
 
