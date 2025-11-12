@@ -4,6 +4,9 @@
     <title>💡 LocalBase</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <!-- Load ApexCharts globally for embedded charts -->
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <!-- Load Chart.js globally for embedded charts -->
@@ -80,7 +83,37 @@
             color: #fff !important;
             border-color: #667eea !important;
         }
-        
+
+        .search-section {
+            margin-bottom: 20px;
+        }
+
+        #viz-search {
+            width: 100%;
+            padding: 12px 16px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        #viz-search:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+
+        .helper-text {
+            color: #666;
+            font-size: 14px;
+            padding: 8px 0;
+        }
+
+        .helper-text strong {
+            color: #888;
+        }
+
         .controls {
             display: flex;
             gap: 10px;
@@ -307,6 +340,82 @@
             text-align: center;
             padding: 60px;
             color: #666;
+        }
+
+        .blank-slate {
+            width: 100%;
+            margin: 100px auto;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .blank-slate h1 {
+            font-size: 3em;
+            color: #e0e0e0;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .blank-slate h2 {
+            font-size: 1.5em;
+            color: #00d9ff;
+            margin-bottom: 40px;
+            font-weight: 400;
+        }
+
+        .blank-slate .steps {
+            text-align: left;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 12px;
+            padding: 30px;
+            margin: 0 auto 30px auto;
+            max-width: 100%;
+        }
+
+        .blank-slate .step {
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+
+        .blank-slate .step.done {
+            color: #666;
+            text-decoration: line-through;
+        }
+
+        .blank-slate .step-number {
+            color: #00d9ff;
+            font-weight: 700;
+            margin-right: 8px;
+        }
+
+        .blank-slate .example-prompt {
+            background: rgba(0, 217, 255, 0.1);
+            border-left: 3px solid #00d9ff;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.95em;
+            color: #00d9ff;
+        }
+
+        .blank-slate .footer {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .blank-slate .footer strong {
+            color: #888;
+        }
+
+        .blank-slate .bounty {
+            color: #00d9ff;
+            font-weight: 600;
         }
         
         
@@ -812,22 +921,13 @@
     
     <!-- Main Layout Container -->
     <div class="main-layout">
-        <!-- Left Sidebar -->
-        <div class="left-sidebar" id="left-sidebar">
-            <div class="sidebar-header" onclick="toggleSidebar()">
-                <h3>📁 Viz Files</h3>
-                <div class="sidebar-controls">
-                    <span class="file-count-badge" id="file-count">0</span>
-                    <span class="collapse-arrow" id="sidebar-arrow">◀</span>
-                </div>
-            </div>
-            <div class="file-list" id="file-browser-grid">
-                <!-- Files will be populated here -->
-            </div>
-        </div>
-        
         <!-- Main Content Area -->
-        <div class="main-content">
+        <div class="main-content" style="margin-left: 0; width: 100%;">
+
+            <div class="search-section">
+                <input type="text" id="viz-search" placeholder="Search visualizations..." />
+                <div class="helper-text">💡 <strong>New here?</strong> Open your AI tool and ask: "Create a chart from my data" — Charts appear here automatically.</div>
+            </div>
 
             <div class="controls">
                 <button class="filter-btn" data-filter="all">All</button>
@@ -994,8 +1094,10 @@
                 
             } catch (error) {
                 console.error('🔥 FULL ERROR LOADING CHARTS:', error);
-                document.getElementById('chart-grid').innerHTML =
-                    `<div class="no-charts">Failed to load charts: ${error.message}<br>Check console for details.</div>`;
+                const grid = document.getElementById('chart-grid');
+                grid.innerHTML = '<div class="no-charts"></div>';
+                const errorDiv = grid.querySelector('.no-charts');
+                errorDiv.textContent = `Failed to load charts: ${error.message}. Check console for details.`;
             } finally {
                 // Populate file browser after data is loaded
                 populateFileBrowser();
@@ -1071,12 +1173,12 @@
                     </div>
                 `);
             });
-            
+
             if (items.length === 0) {
-                grid.innerHTML = '<div class="no-charts">No items found. Generate some charts or create dashboards!</div>';
+                grid.innerHTML = '<div class="no-charts">No visualizations match current filter.</div>';
                 return;
             }
-            
+
             console.log('🔥 SETTING GRID HTML:', items.length + ' items');
             grid.innerHTML = items.join('');
             console.log('🔥 GRID HTML SET, calling populateFileBrowser');
@@ -1272,22 +1374,7 @@
                 updateUrlWithVizId(vizId);
             }
 
-            // Find the visualization to update the active file pill
-            const currentViz = allVisualizations.find(v => v.id === vizId);
-            if (currentViz) {
-                // Update the "new chart tab" to show the currently active visualization
-                const newTab = document.getElementById('new-chart-tab');
-                if (newTab) {
-                    newTab.textContent = `✨ ${(currentViz.title || currentViz.name || 'Visualization').replace('💰 ', '').replace('📊 ', '')}`;
-                    newTab.style.display = 'inline-block';
-
-                    // Clear all filter pills and activate the current file pill
-                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                    newTab.classList.add('active');
-
-                    console.log('🔥 Updated active file pill:', { vizTitle: currentViz.title, vizId });
-                }
-            }
+            // Don't mess with tabs - let "All" stay highlighted
 
             try {
                 // Use iframe instead of HTML injection to preserve layout
@@ -1466,6 +1553,9 @@
             const grid = document.getElementById('file-browser-grid');
             const fileCount = document.getElementById('file-count');
 
+            // Sidebar was removed, skip this function
+            if (!grid || !fileCount) return;
+
             // Safety checks
             if (!allVisualizations) allVisualizations = [];
 
@@ -1510,7 +1600,9 @@
             });
             
             // Update count
-            fileCount.textContent = allFiles.length;
+            if (fileCount) {
+                fileCount.textContent = allFiles.length;
+            }
             
             if (allFiles.length === 0) {
                 grid.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">No files found</div>';
@@ -1677,7 +1769,21 @@
         const dataSearch = document.getElementById('data-search');
         if (metricFilter) metricFilter.addEventListener('change', displayDataTable);
         if (dataSearch) dataSearch.addEventListener('input', displayDataTable);
-        
+
+        // Search functionality
+        const vizSearch = document.getElementById('viz-search');
+        if (vizSearch) {
+            vizSearch.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                const filtered = allVisualizations.filter(viz => {
+                    return (viz.title || '').toLowerCase().includes(query) ||
+                           (viz.name || '').toLowerCase().includes(query) ||
+                           (viz.description || '').toLowerCase().includes(query);
+                });
+                displayCharts(filtered);
+            });
+        }
+
         // Initial load first
         loadCharts();
 
@@ -1686,16 +1792,10 @@
             checkForAutoOpen();
         }
 
-        // Set 'All' as default active pill only if no embedded chart is showing
+        // Always set "All" as active - simple default
         setTimeout(() => {
-            const embeddedChartSection = document.getElementById('inline-chart-section');
-            const isEmbeddedChartVisible = embeddedChartSection && embeddedChartSection.style.display !== 'none';
-
-            // Only reset to 'all' if no embedded chart is currently displayed
-            if (!isEmbeddedChartVisible) {
-                document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                document.querySelector('.filter-btn[data-filter="all"]')?.classList.add('active');
-            }
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector('.filter-btn[data-filter="all"]')?.classList.add('active');
         }, 100);
         
         // Set up event listeners after initial load

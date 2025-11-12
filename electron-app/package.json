@@ -74,12 +74,6 @@
       "!electron/server.js",
       "src/lib/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "../env.local",
-        "to": "env.local"
-      }
-    ],
     "mac": {
       "category": "public.app-category.business",
       "target": "dmg",
