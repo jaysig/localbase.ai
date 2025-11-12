@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node tools/server/app-server.js",
+    "web": "npm start & sleep 2 && open http://localhost:3000",
     "mcp": "node tools/mcp/server.js",
     "dev": "node --watch tools/server/app-server.js",
     "update-g2": "node connectors/g2-api/update.js",

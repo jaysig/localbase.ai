@@ -1,0 +1,17 @@
+{
+  "visualizations": [
+    {
+      "id": "framework-stats",
+      "filename": "framework-stats.html",
+      "title": "Framework Repository Stats",
+      "description": "Repository size breakdown showing Git repo size vs working directory with node_modules",
+      "type": "dashboard",
+      "library": "apexcharts",
+      "url": "/viz/framework-stats.html",
+      "workspace": "my-workspace",
+      "size": "large",
+      "created": "2025-11-12T19:30:00.000Z",
+      "updated": "2025-11-12T19:30:00.000Z"
+    }
+  ]
+}

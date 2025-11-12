@@ -14,7 +14,8 @@ const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 /**
  * Detect available LocalBase workspaces
- * Scans ~/Work for directories containing app/assets/visualizations.json
+ * Scans ~/Work for directories containing app/assets/visualizations.json or web-app/assets/visualizations.json
+ * Also checks for my-workspace in the framework directory
  */
 export function detectWorkspaces() {
   const workDir = join(homedir(), 'Work');
@@ -29,9 +30,25 @@ export function detectWorkspaces() {
       // Check if it's a directory
       if (!statSync(fullPath).isDirectory()) continue;
 
-      // Check if it has app/assets/visualizations.json (indicates LocalBase instance)
-      const vizJsonPath = join(fullPath, 'app', 'assets', 'visualizations.json');
-      if (existsSync(vizJsonPath)) {
+      // Check for my-workspace in framework (highest priority)
+      const myWorkspacePath = join(fullPath, 'my-workspace', 'web-app', 'assets', 'visualizations.json');
+
+      if (existsSync(myWorkspacePath)) {
+        // Framework with my-workspace - add my-workspace only, skip the parent
+        workspaces.push({
+          name: 'my-workspace',
+          path: join(fullPath, 'my-workspace')
+        });
+        // Don't add the framework directory itself
+        continue;
+      }
+
+      // Check for web-app/assets/visualizations.json (new pattern)
+      const webAppVizPath = join(fullPath, 'web-app', 'assets', 'visualizations.json');
+      // Check for app/assets/visualizations.json (legacy pattern)
+      const appVizPath = join(fullPath, 'app', 'assets', 'visualizations.json');
+
+      if (existsSync(webAppVizPath) || existsSync(appVizPath)) {
         workspaces.push({
           name: entry,
           path: fullPath
@@ -92,8 +109,16 @@ export function getCurrentWorkspace() {
     }
   }
 
-  // No valid config - return first available workspace
+  // No valid config - prefer my-workspace if it exists, otherwise use first available
   const workspaces = detectWorkspaces();
+
+  // Prioritize my-workspace as the default
+  const myWorkspace = workspaces.find(w => w.name === 'my-workspace');
+  if (myWorkspace) {
+    return myWorkspace.path;
+  }
+
+  // Fall back to first available workspace
   if (workspaces.length > 0) {
     return workspaces[0].path;
   }
