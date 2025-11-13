@@ -1,13 +1,13 @@
 {
   "visualizations": [
     {
-      "id": "workspace-stats",
-      "filename": "workspace-stats.html",
-      "title": "📊 Workspace Stats",
-      "description": "Real-time workspace statistics including visualizations, connectors, and data sources",
-      "type": "dashboard",
-      "library": "apexcharts",
-      "url": "/viz/workspace-stats.html",
+      "id": "start",
+      "filename": "start.html",
+      "title": "🚀 Start",
+      "description": "Getting started with LocalBase - framework structure and quick start guide",
+      "type": "guide",
+      "library": "none",
+      "url": "/viz/start.html",
       "workspace": "my-workspace",
       "createdAt": "2025-11-13T00:00:00.000Z"
     }

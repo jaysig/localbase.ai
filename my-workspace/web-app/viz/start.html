@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Start - LocalBase.ai</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Monaco', 'Courier New', monospace;
+            background: #1a1a2e;
+            color: #00ff9d;
+            padding: 40px;
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border-left: 3px solid #00ff9d;
+        }
+
+        .tree {
+            color: #00d9ff;
+        }
+
+        .size {
+            color: #ff9d00;
+        }
+
+        .command {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 30px;
+            border-radius: 8px;
+            margin-top: 40px;
+            border: 2px solid #00ff9d;
+        }
+
+        .prompt {
+            color: #00ff9d;
+        }
+
+        .question {
+            color: #e0e0e0;
+            font-style: italic;
+        }
+
+        h2 {
+            color: #00ff9d;
+            margin: 30px 0 15px 0;
+            font-size: 1.2em;
+        }
+
+        .subtle {
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📂 Framework Structure</h2>
+        <pre class="tree">
+localbase.ai/                    <span class="size">669 MB</span>
+├── node_modules/                <span class="size">665 MB</span>  <span class="subtle">(dependencies)</span>
+│   ├── googleapis/              <span class="size">182 MB</span>
+│   ├── highcharts/              <span class="size">66 MB</span>
+│   ├── tesseract.js-core/       <span class="size">29 MB</span>
+│   └── ...others
+├── tools/                       <span class="size">1.2 MB</span>   <span class="subtle">(framework core)</span>
+│   ├── mcp/                     <span class="subtle">(Claude integration)</span>
+│   ├── server/                  <span class="subtle">(Express web server)</span>
+│   ├── viz/                     <span class="subtle">(chart generators)</span>
+│   └── connectors/              <span class="subtle">(BaseConnector class)</span>
+├── web-app/                     <span class="size">450 KB</span>  <span class="subtle">(dashboard UI)</span>
+├── connectors/                  <span class="size">150 KB</span>  <span class="subtle">(your data sources)</span>
+├── data/                        <span class="size">varies</span>  <span class="subtle">(SQLite databases)</span>
+└── my-workspace/                <span class="size">120 KB</span>  <span class="subtle">(your instance)</span>
+</pre>
+
+        <h2>🚀 Quick Start</h2>
+        <div class="command">
+<span class="prompt">$</span> cd ~/Work/my-workspace
+<span class="prompt">$</span> claude
+
+<span class="prompt">>>>></span> <span class="question">"How many leads did we get yesterday?"</span>
+        </div>
+
+        <pre class="subtle">
+Claude will:
+1. Check your connectors (CRM, email, forms)
+2. Query your local SQLite databases
+3. Generate a visualization
+4. Show results in this dashboard
+        </pre>
+    </div>
+</body>
+</html>
