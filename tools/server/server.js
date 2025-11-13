@@ -192,6 +192,13 @@ app.get('/api/visualizations', (req, res) => {
 // DELETE endpoint for visualization removal
 app.delete('/api/viz/:id', (req, res) => {
   const { id } = req.params;
+
+  // Validate ID to prevent path traversal attacks
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    console.log(`⚠️ Invalid viz ID rejected: ${id}`);
+    return res.status(400).json({ success: false, error: 'Invalid visualization ID format' });
+  }
+
   const registryPath = join(currentWorkspace, 'web-app', 'assets', 'visualizations.json');
   const vizPath = join(currentWorkspace, 'web-app', 'viz', `${id}.html`);
 
