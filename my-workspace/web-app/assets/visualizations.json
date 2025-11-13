@@ -1,6 +1,17 @@
 {
   "visualizations": [
     {
+      "id": "workspace-stats",
+      "filename": "workspace-stats.html",
+      "title": "📊 Workspace Stats",
+      "description": "Real-time workspace statistics including visualizations, connectors, and data sources",
+      "type": "dashboard",
+      "library": "apexcharts",
+      "url": "/viz/workspace-stats.html",
+      "workspace": "my-workspace",
+      "createdAt": "2025-11-13T00:00:00.000Z"
+    },
+    {
       "id": "example-framework-stats",
       "filename": "EXAMPLE-framework-stats.html",
       "title": "Framework Repository Stats",
