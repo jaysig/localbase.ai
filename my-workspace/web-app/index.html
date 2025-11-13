@@ -720,8 +720,6 @@
             <button onclick="openWorkspaceModal()" style="background: #2a2a2a; padding: 6px 12px; border-radius: 4px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #667eea; border: 1px solid #333; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <span style="color: #999;">//</span>
                 <span id="current-workspace-name">my-workspace</span>
-                <span style="color: #555;">•</span>
-                <span style="color: #888;">⌘ + K</span>
                 <span style="color: #999;">//</span>
             </button>
         </div>
@@ -1345,14 +1343,6 @@
                     return;
                 }
 
-                // Cmd+K: Open workspace switcher
-                const modifierKey = event.metaKey || event.ctrlKey;
-                if (modifierKey && event.key === 'k') {
-                    event.preventDefault();
-                    openWorkspaceModal();
-                    return;
-                }
-
                 // Escape: Close embedded chart and return to clean state
                 if (event.key === 'Escape') {
                     event.preventDefault();
@@ -1391,7 +1381,6 @@
             });
 
             console.log('🔥 KEYBOARD SHORTCUTS SETUP COMPLETE');
-            console.log('   - Cmd+K: Open workspace switcher');
             console.log('   - Escape: Close embedded chart or modal');
             console.log('   - Cmd/Ctrl + /: Return to home');
             console.log('   - Cmd/Ctrl + Option + Up/Down: Cycle workspaces');
@@ -1716,7 +1705,6 @@
         <div class="workspace-modal">
             <div class="workspace-modal-header">
                 <h3>Switch Workspace</h3>
-                <span class="workspace-modal-hint">⌘ + K</span>
             </div>
             <div id="workspace-modal-list" class="workspace-modal-list"></div>
             <div class="workspace-modal-footer">
