@@ -149,7 +149,32 @@
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="stats-content" style="display: none;">
+            <h2 style="color: #00d9ff; margin-bottom: 20px; font-size: 1.5em;">Instance Stats</h2>
             <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Git Repo (.git)</div>
+                    <div class="stat-value" id="git-size">0 MB</div>
+                    <div class="stat-sub">What gets cloned</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Tracked Files</div>
+                    <div class="stat-value" id="tracked-files">0</div>
+                    <div class="stat-sub">In version control</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Code + Assets</div>
+                    <div class="stat-value" id="code-size">0 MB</div>
+                    <div class="stat-sub">Excluding node_modules</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">node_modules</div>
+                    <div class="stat-value" id="node-size">0 GB</div>
+                    <div class="stat-sub">Ignored by Git</div>
+                </div>
+
                 <div class="stat-card">
                     <div class="stat-label">Visualizations</div>
                     <div class="stat-value" id="viz-count">0</div>
@@ -167,11 +192,26 @@
                     <div class="stat-value" id="db-count">0</div>
                     <div class="stat-sub" id="db-size">0 MB</div>
                 </div>
+            </div>
+
+            <h2 style="color: #00ff9d; margin: 40px 0 20px 0; font-size: 1.5em;">Framework Stats (Synced)</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Framework Files</div>
+                    <div class="stat-value" id="framework-files">0</div>
+                    <div class="stat-sub">tools/ + web-app/ + electron-app/</div>
+                </div>
 
                 <div class="stat-card">
-                    <div class="stat-label">Tracked Files</div>
-                    <div class="stat-value" id="tracked-files">0</div>
-                    <div class="stat-sub">In version control</div>
+                    <div class="stat-label">Framework Size</div>
+                    <div class="stat-value" id="framework-size">0 MB</div>
+                    <div class="stat-sub">Synced from localbase.ai</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Last Sync</div>
+                    <div class="stat-value" id="last-sync">—</div>
+                    <div class="stat-sub">Framework update</div>
                 </div>
             </div>
 
@@ -205,13 +245,44 @@
                     throw new Error('Failed to get workspace info');
                 }
 
-                const workspacePath = workspaceData.workspace;
-                const workspaceName = workspacePath.split('/').pop();
+                const workspaceName = workspaceData.workspace;
+                const workspacePath = workspaceData.path;
 
                 document.getElementById('workspace-name').textContent = `${workspaceName} Stats`;
                 document.getElementById('workspace-path').textContent = workspacePath;
 
-                // Load visualizations
+                // Load detailed workspace stats
+                const statsResponse = await fetch('/api/workspace/stats');
+                const statsData = await statsResponse.json();
+
+                if (!statsData.success) {
+                    throw new Error('Failed to get workspace stats');
+                }
+
+                const stats = statsData.stats;
+
+                // Update all stat cards
+                document.getElementById('git-size').textContent = stats.gitRepoSize || 'N/A';
+                document.getElementById('tracked-files').textContent = stats.trackedFiles || 0;
+                document.getElementById('code-size').textContent = stats.codeSize || 'N/A';
+                document.getElementById('node-size').textContent = stats.nodeModulesSize || 'N/A';
+                document.getElementById('viz-count').textContent = stats.visualizationCount || 0;
+                document.getElementById('connector-count').textContent = stats.connectorCount || 0;
+                document.getElementById('db-count').textContent = stats.databaseCount || 0;
+                document.getElementById('db-size').textContent = stats.databaseSize || '0B';
+
+                // Load framework stats
+                const frameworkResponse = await fetch('/api/workspace/framework-stats');
+                const frameworkData = await frameworkResponse.json();
+
+                if (frameworkData.success) {
+                    const fwStats = frameworkData.frameworkStats;
+                    document.getElementById('framework-files').textContent = fwStats.files || 0;
+                    document.getElementById('framework-size').textContent = fwStats.size || 'N/A';
+                    document.getElementById('last-sync').textContent = fwStats.lastSync || '—';
+                }
+
+                // Load visualizations for charts
                 const vizResponse = await fetch('/api/viz');
                 const vizData = await vizResponse.json();
                 const visualizations = vizData.visualizations || [];
@@ -223,26 +294,11 @@
                     vizTypes[type] = (vizTypes[type] || 0) + 1;
                 });
 
-                // Update stats
-                document.getElementById('viz-count').textContent = visualizations.length;
-
-                // Count connectors (we'll need to add an API endpoint for this)
-                // For now, extract from viz data
+                // Get libraries for chart
                 const libraries = new Set();
                 visualizations.forEach(viz => {
                     if (viz.library) libraries.add(viz.library);
                 });
-
-                // Estimate connectors from visualizations (placeholder until we add API)
-                const estimatedConnectors = Math.max(1, Math.floor(visualizations.length / 5));
-                document.getElementById('connector-count').textContent = estimatedConnectors;
-
-                // Placeholder for database stats (would need server API)
-                document.getElementById('db-count').textContent = '—';
-                document.getElementById('db-size').textContent = 'API needed';
-
-                // Placeholder for tracked files (would need server API)
-                document.getElementById('tracked-files').textContent = '—';
 
                 // Create visualization types chart
                 const vizTypeLabels = Object.keys(vizTypes);
