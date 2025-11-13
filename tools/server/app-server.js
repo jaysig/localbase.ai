@@ -735,6 +735,123 @@ app.get('/api/workspace', (req, res) => {
 });
 
 /**
+ * GET /api/workspace/stats
+ * Returns detailed workspace statistics including file counts, sizes, etc.
+ */
+app.get('/api/workspace/stats', (req, res) => {
+  try {
+    const { execSync } = require('child_process');
+    const fs = require('fs');
+    const path = require('path');
+
+    const workspaceName = currentWorkspace.split('/').pop();
+    const stats = {
+      workspace: workspaceName,
+      path: currentWorkspace
+    };
+
+    // Get git repo size
+    try {
+      const gitDir = path.join(currentWorkspace, '.git');
+      if (fs.existsSync(gitDir)) {
+        const gitSize = execSync(`du -sh "${gitDir}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+        stats.gitRepoSize = gitSize;
+      }
+    } catch (e) {
+      stats.gitRepoSize = 'N/A';
+    }
+
+    // Get tracked files count
+    try {
+      const trackedFiles = execSync(`cd "${currentWorkspace}" && git ls-files 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
+      stats.trackedFiles = parseInt(trackedFiles) || 0;
+    } catch (e) {
+      stats.trackedFiles = 0;
+    }
+
+    // Get code + assets size (excluding node_modules and .git)
+    try {
+      const codeSize = execSync(`du -sh --exclude=node_modules --exclude=.git "${currentWorkspace}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+      stats.codeSize = codeSize;
+    } catch (e) {
+      stats.codeSize = 'N/A';
+    }
+
+    // Get node_modules size
+    try {
+      const nodeModulesDir = path.join(currentWorkspace, 'node_modules');
+      const electronNodeModulesDir = path.join(currentWorkspace, 'electron-app/node_modules');
+      let nodeSize = '0B';
+
+      if (fs.existsSync(nodeModulesDir) || fs.existsSync(electronNodeModulesDir)) {
+        const dirs = [nodeModulesDir, electronNodeModulesDir].filter(d => fs.existsSync(d));
+        nodeSize = execSync(`du -sh ${dirs.map(d => `"${d}"`).join(' ')} 2>/dev/null | awk '{sum+=$1} END {print sum "M"}'`, { encoding: 'utf8' }).trim();
+      }
+      stats.nodeModulesSize = nodeSize;
+    } catch (e) {
+      stats.nodeModulesSize = 'N/A';
+    }
+
+    // Get visualizations count
+    try {
+      const vizRegistryPath = path.join(currentWorkspace, 'web-app/assets/visualizations.json');
+      if (fs.existsSync(vizRegistryPath)) {
+        const vizRegistry = JSON.parse(fs.readFileSync(vizRegistryPath, 'utf8'));
+        stats.visualizationCount = vizRegistry.visualizations?.length || 0;
+      } else {
+        stats.visualizationCount = 0;
+      }
+    } catch (e) {
+      stats.visualizationCount = 0;
+    }
+
+    // Get connectors count
+    try {
+      const connectorsDir = path.join(currentWorkspace, 'connectors');
+      if (fs.existsSync(connectorsDir)) {
+        const connectors = fs.readdirSync(connectorsDir).filter(item => {
+          const itemPath = path.join(connectorsDir, item);
+          return fs.statSync(itemPath).isDirectory() && !item.startsWith('.');
+        });
+        stats.connectorCount = connectors.length;
+      } else {
+        stats.connectorCount = 0;
+      }
+    } catch (e) {
+      stats.connectorCount = 0;
+    }
+
+    // Get database files count and size
+    try {
+      const dataDir = path.join(currentWorkspace, 'data');
+      if (fs.existsSync(dataDir)) {
+        const dbCount = execSync(`find "${dataDir}" -name "*.db" 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
+        const dbSize = execSync(`du -sh "${dataDir}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+        stats.databaseCount = parseInt(dbCount) || 0;
+        stats.databaseSize = dbSize;
+      } else {
+        stats.databaseCount = 0;
+        stats.databaseSize = '0B';
+      }
+    } catch (e) {
+      stats.databaseCount = 0;
+      stats.databaseSize = '0B';
+    }
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('Error getting workspace stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /health
  * Health check endpoint
  */
