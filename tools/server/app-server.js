@@ -871,8 +871,16 @@ app.get('/api/workspace/framework-stats', (req, res) => {
     let totalSize = 0;
     let lastModified = null;
 
+    // Check if current workspace is a subdirectory (like my-workspace)
+    // If so, use parent directory for framework stats
+    let frameworkRoot = currentWorkspace;
+    const workspaceName = basename(currentWorkspace);
+    if (workspaceName === 'my-workspace' || workspaceName.endsWith('-workspace')) {
+      frameworkRoot = dirname(currentWorkspace);
+    }
+
     frameworkDirs.forEach(dir => {
-      const dirPath = join(currentWorkspace, dir);
+      const dirPath = join(frameworkRoot, dir);
       if (existsSync(dirPath)) {
         try {
           // Count files
