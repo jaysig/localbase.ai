@@ -968,75 +968,88 @@ app.get('/api/workspace/framework-stats', (req, res) => {
 
 /**
  * GET /api/workspace/node-modules-breakdown
- * Returns detailed breakdown of node_modules by package size
+ * Returns detailed breakdown of entire framework repo by directory/file
  */
 app.get('/api/workspace/node-modules-breakdown', (req, res) => {
   try {
-    const nodeModulesDir = join(currentWorkspace, 'node_modules');
-
-    if (!existsSync(nodeModulesDir)) {
-      return res.json({
-        success: true,
-        packages: []
-      });
+    // Check if current workspace is a subdirectory (like my-workspace)
+    let frameworkRoot = currentWorkspace;
+    const workspaceName = basename(currentWorkspace);
+    if (workspaceName === 'my-workspace' || workspaceName.endsWith('-workspace')) {
+      frameworkRoot = dirname(currentWorkspace);
     }
 
-    // Get size of each top-level package
-    const packages = readdirSync(nodeModulesDir)
-      .filter(item => {
-        const itemPath = join(nodeModulesDir, item);
-        return statSync(itemPath).isDirectory();
-      })
-      .map(packageName => {
-        const packagePath = join(nodeModulesDir, packageName);
-        try {
-          const sizeKB = execSync(`du -sk "${packagePath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-          const sizeMB = parseInt(sizeKB) / 1024;
+    const items = [];
 
-          // Try to determine category from package.json
-          let category = 'other';
+    // Get node_modules breakdown (top packages)
+    const nodeModulesDir = join(frameworkRoot, 'node_modules');
+    if (existsSync(nodeModulesDir)) {
+      const packages = readdirSync(nodeModulesDir)
+        .filter(item => {
+          const itemPath = join(nodeModulesDir, item);
+          return statSync(itemPath).isDirectory();
+        })
+        .map(packageName => {
+          const packagePath = join(nodeModulesDir, packageName);
           try {
-            const pkgJsonPath = join(packagePath, 'package.json');
-            if (existsSync(pkgJsonPath)) {
-              const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8'));
-              const keywords = pkgJson.keywords || [];
-              const description = (pkgJson.description || '').toLowerCase();
+            const sizeKB = execSync(`du -sk "${packagePath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+            const sizeMB = parseInt(sizeKB) / 1024;
 
-              if (packageName.includes('electron') || keywords.includes('electron')) {
-                category = 'electron';
-              } else if (packageName.includes('webpack') || packageName.includes('babel') || keywords.includes('build')) {
-                category = 'build';
-              } else if (packageName.includes('sqlite') || keywords.includes('database')) {
-                category = 'database';
-              } else if (packageName.includes('react') || packageName.includes('vue') || keywords.includes('ui')) {
-                category = 'ui';
-              } else if (description.includes('test') || keywords.includes('test')) {
-                category = 'testing';
-              }
-            }
-          } catch (e) {}
+            return {
+              name: packageName,
+              sizeMB: Math.round(sizeMB * 100) / 100,
+              sizeKB: parseInt(sizeKB),
+              category: 'node_modules'
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(p => p !== null)
+        .sort((a, b) => b.sizeKB - a.sizeKB);
 
-          return {
-            name: packageName,
+      // Add top 15 packages individually
+      items.push(...packages.slice(0, 15));
+
+      // Group remaining packages as "other node_modules"
+      const remainingSize = packages.slice(15).reduce((sum, p) => sum + p.sizeMB, 0);
+      if (remainingSize > 0) {
+        items.push({
+          name: 'other node_modules',
+          sizeMB: Math.round(remainingSize * 100) / 100,
+          category: 'node_modules'
+        });
+      }
+    }
+
+    // Get framework directories
+    const frameworkDirs = ['tools', 'web-app', 'connectors', 'data', 'scripts', 'my-workspace'];
+    frameworkDirs.forEach(dir => {
+      const dirPath = join(frameworkRoot, dir);
+      if (existsSync(dirPath)) {
+        try {
+          const sizeKB = execSync(`du -sk "${dirPath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+          const sizeMB = parseInt(sizeKB) / 1024;
+          items.push({
+            name: dir,
             sizeMB: Math.round(sizeMB * 100) / 100,
             sizeKB: parseInt(sizeKB),
-            category
-          };
-        } catch (e) {
-          return null;
-        }
-      })
-      .filter(p => p !== null)
-      .sort((a, b) => b.sizeKB - a.sizeKB);
+            category: 'framework'
+          });
+        } catch (e) {}
+      }
+    });
+
+    // Sort all items by size
+    items.sort((a, b) => (b.sizeKB || b.sizeMB * 1024) - (a.sizeKB || a.sizeMB * 1024));
 
     res.json({
       success: true,
-      packages: packages.slice(0, 50), // Top 50 packages
-      total: packages.reduce((sum, p) => sum + p.sizeMB, 0),
-      count: packages.length
+      items: items,
+      total: items.reduce((sum, item) => sum + item.sizeMB, 0)
     });
   } catch (error) {
-    console.error('Error analyzing node_modules:', error);
+    console.error('Error analyzing framework:', error);
     res.status(500).json({
       success: false,
       error: error.message

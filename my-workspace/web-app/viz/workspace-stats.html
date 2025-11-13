@@ -328,140 +328,15 @@
 </head>
 <body>
     <div class="container">
-        <h1 id="workspace-name">Workspace Stats</h1>
-        <p class="subtitle" id="workspace-path">Loading...</p>
-
         <div class="loading" id="loading">
             Loading workspace statistics...
         </div>
 
         <div id="stats-content" style="display: none;">
-            <!-- Hero Comparison: Framework vs Unhooked -->
-            <div class="hero-comparison">
-                <div class="comparison-card framework">
-                    <div class="card-header">
-                        <div class="card-icon">🔗</div>
-                        <div>
-                            <div class="card-title">Framework Connected</div>
-                        </div>
-                    </div>
-                    <div class="card-subtitle">
-                        Your workspace synced with the LocalBase framework. Full-featured IDE, live updates, and ecosystem tools.
-                    </div>
-                    <div class="size-display">
-                        <div class="size-number" id="framework-total-size">0</div>
-                        <div class="size-unit">MB</div>
-                    </div>
-                    <ul class="breakdown-list">
-                        <li class="breakdown-item">
-                            <span class="breakdown-label">Core Framework</span>
-                            <span class="breakdown-value" id="framework-core-size">0 MB</span>
-                        </li>
-                        <li class="breakdown-item">
-                            <span class="breakdown-label">Instance Code</span>
-                            <span class="breakdown-value" id="framework-instance-code">0 MB</span>
-                        </li>
-                        <li class="breakdown-item">
-                            <span class="breakdown-label">Your Data</span>
-                            <span class="breakdown-value" id="framework-data-size">0 MB</span>
-                        </li>
-                        <li class="breakdown-item">
-                            <span class="breakdown-label">Dependencies</span>
-                            <span class="breakdown-value" id="framework-deps-size">0 MB</span>
-                        </li>
-                    </ul>
-                </div>
-
-                <div class="comparison-card unhooked">
-                    <div class="card-header">
-                        <div class="card-icon">📦</div>
-                        <div>
-                            <div class="card-title">Unhooked Mode</div>
-                        </div>
-                    </div>
-                    <div class="card-subtitle">
-                        Your data if you disconnect from the framework. Everything you need: databases, connectors, and visualizations.
-                    </div>
-                    <div class="size-display">
-                        <div class="size-number" id="unhooked-total-size">0</div>
-                        <div class="size-unit">MB</div>
-                    </div>
-                    <ul class="breakdown-list">
-                        <li class="breakdown-item">
-                            <span class="breakdown-label">Databases</span>
-                            <span class="breakdown-value" id="unhooked-db-size">0 MB</span>
-                        </li>
-                        <li class="breakdown-item">
-                            <span class="breakdown-label">Connectors</span>
-                            <span class="breakdown-value" id="unhooked-connector-size">0 MB</span>
-                        </li>
-                        <li class="breakdown-item">
-                            <span class="breakdown-label">Visualizations</span>
-                            <span class="breakdown-value" id="unhooked-viz-size">0 MB</span>
-                        </li>
-                        <li class="breakdown-item">
-                            <span class="breakdown-label">Environment</span>
-                            <span class="breakdown-value" id="unhooked-env-size">0 KB</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Quick Stats -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">Visualizations</div>
-                    <div class="stat-value" id="viz-count">0</div>
-                    <div class="stat-sub">Charts & dashboards</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Connectors</div>
-                    <div class="stat-value" id="connector-count">0</div>
-                    <div class="stat-sub">Data sources</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Database Files</div>
-                    <div class="stat-value" id="db-count">0</div>
-                    <div class="stat-sub" id="db-size">0 MB</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Last Sync</div>
-                    <div class="stat-value" id="last-sync">—</div>
-                    <div class="stat-sub">Framework update</div>
-                </div>
-            </div>
-
-            <!-- Visual Breakdowns -->
-            <div class="section-header">📊 Visual Breakdown</div>
-
-            <div class="chart-row">
-                <div class="chart-container">
-                    <div class="chart-title">Framework Files Distribution</div>
-                    <div id="frameworkFilesChart"></div>
-                </div>
-                <div class="chart-container">
-                    <div class="chart-title">Storage Breakdown</div>
-                    <div id="storageChart"></div>
-                </div>
-            </div>
-
+            <!-- Framework Breakdown -->
             <div class="chart-container full-width">
-                <div class="chart-title">Core Framework vs Instance Additions</div>
-                <div id="comparisonChart"></div>
-            </div>
-
-            <div class="chart-container full-width">
-                <div class="chart-title">node_modules Breakdown (Top 20 Packages)</div>
+                <div class="chart-title">Framework Size Breakdown</div>
                 <div id="nodeModulesChart"></div>
-            </div>
-
-            <div class="important-note">
-                <h3>🔓 About Unhooking</h3>
-                <p>
-                    LocalBase is designed for data mobility. Your data stays local, always. If you ever want to disconnect from the framework,
-                    you keep everything important: your databases (SQLite files), connectors (JavaScript), visualizations (HTML), and credentials (env.local).
-                    The framework provides the IDE and tools, but your data is never locked in. Export, migrate, or run standalone anytime.
-                </p>
             </div>
         </div>
     </div>
@@ -476,12 +351,6 @@
                 if (!workspaceData.success) {
                     throw new Error('Failed to get workspace info');
                 }
-
-                const workspaceName = workspaceData.workspace;
-                const workspacePath = workspaceData.path;
-
-                document.getElementById('workspace-name').textContent = `${workspaceName} Stats`;
-                document.getElementById('workspace-path').textContent = workspacePath;
 
                 // Load detailed workspace stats
                 const statsResponse = await fetch('/api/workspace/stats');
@@ -520,40 +389,6 @@
                 const dbSizeMB = parseSize(stats.databaseSize);
                 const nodeModulesMB = parseSize(stats.nodeModulesSize);
 
-                // Framework Connected breakdown
-                const instanceCodeSize = instanceSizeMB - coreSizeMB;
-                const frameworkTotalSize = instanceSizeMB + dbSizeMB + nodeModulesMB;
-
-                document.getElementById('framework-total-size').textContent = Math.round(frameworkTotalSize);
-                document.getElementById('framework-core-size').textContent = Math.round(coreSizeMB) + ' MB';
-                document.getElementById('framework-instance-code').textContent = Math.round(instanceCodeSize) + ' MB';
-                document.getElementById('framework-data-size').textContent = Math.round(dbSizeMB) + ' MB';
-                document.getElementById('framework-deps-size').textContent = Math.round(nodeModulesMB) + ' MB';
-
-                // Unhooked Mode breakdown (data + connectors + viz)
-                // Estimate connector and viz sizes (typically small)
-                const connectorSizeMB = 1; // connectors are typically ~1MB
-                const vizSizeMB = stats.visualizationCount * 0.05; // ~50KB per viz
-                const unhookedTotalSize = dbSizeMB + connectorSizeMB + vizSizeMB + 0.01; // +env.local
-
-                document.getElementById('unhooked-total-size').textContent = Math.round(unhookedTotalSize);
-                document.getElementById('unhooked-db-size').textContent = Math.round(dbSizeMB) + ' MB';
-                document.getElementById('unhooked-connector-size').textContent = connectorSizeMB.toFixed(1) + ' MB';
-                document.getElementById('unhooked-viz-size').textContent = vizSizeMB.toFixed(1) + ' MB';
-                document.getElementById('unhooked-env-size').textContent = '10 KB';
-
-                // Quick stats
-                document.getElementById('viz-count').textContent = stats.visualizationCount || 0;
-                document.getElementById('connector-count').textContent = stats.connectorCount || 0;
-                document.getElementById('db-count').textContent = stats.databaseCount || 0;
-                document.getElementById('db-size').textContent = stats.databaseSize || '0B';
-                document.getElementById('last-sync').textContent = instanceStats.lastSync || '—';
-
-                // Charts
-                renderFrameworkFilesChart(coreStats.files, instanceStats.files);
-                renderStorageChart(coreSizeMB, instanceCodeSize, dbSizeMB, nodeModulesMB);
-                renderComparisonChart(coreStats.files, instanceStats.files - coreStats.files);
-
                 // Load and render node_modules breakdown
                 loadNodeModulesBreakdown();
 
@@ -567,214 +402,38 @@
             }
         }
 
-        function renderFrameworkFilesChart(coreFiles, totalFiles) {
-            const addedFiles = totalFiles - coreFiles;
-
-            const options = {
-                series: [coreFiles, addedFiles],
-                chart: {
-                    type: 'donut',
-                    height: 300,
-                    background: 'transparent'
-                },
-                labels: ['Core Framework', 'Instance Additions'],
-                colors: ['#00ff9d', '#ff9d00'],
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        colors: '#e0e0e0'
-                    }
-                },
-                dataLabels: {
-                    enabled: true,
-                    style: {
-                        colors: ['#000']
-                    }
-                },
-                plotOptions: {
-                    pie: {
-                        donut: {
-                            labels: {
-                                show: true,
-                                total: {
-                                    show: true,
-                                    label: 'Total Files',
-                                    color: '#e0e0e0'
-                                }
-                            }
-                        }
-                    }
-                },
-                tooltip: {
-                    theme: 'dark'
-                }
-            };
-
-            const chart = new ApexCharts(document.querySelector("#frameworkFilesChart"), options);
-            chart.render();
-        }
-
-        function renderStorageChart(core, instance, data, deps) {
-            const options = {
-                series: [{
-                    name: 'Size (MB)',
-                    data: [
-                        Math.round(core),
-                        Math.round(instance),
-                        Math.round(data),
-                        Math.round(deps)
-                    ]
-                }],
-                chart: {
-                    type: 'bar',
-                    height: 300,
-                    background: 'transparent',
-                    toolbar: {
-                        show: false
-                    }
-                },
-                plotOptions: {
-                    bar: {
-                        horizontal: true,
-                        distributed: true,
-                        barHeight: '60%'
-                    }
-                },
-                colors: ['#00ff9d', '#ff9d00', '#00d9ff', '#666'],
-                xaxis: {
-                    categories: ['Core Framework', 'Your Code', 'Databases', 'Dependencies'],
-                    labels: {
-                        style: {
-                            colors: '#e0e0e0'
-                        }
-                    }
-                },
-                yaxis: {
-                    labels: {
-                        style: {
-                            colors: '#e0e0e0'
-                        }
-                    }
-                },
-                dataLabels: {
-                    enabled: true,
-                    style: {
-                        colors: ['#000']
-                    },
-                    formatter: function(val) {
-                        return val + ' MB';
-                    }
-                },
-                legend: {
-                    show: false
-                },
-                tooltip: {
-                    theme: 'dark'
-                }
-            };
-
-            const chart = new ApexCharts(document.querySelector("#storageChart"), options);
-            chart.render();
-        }
-
-        function renderComparisonChart(coreFiles, addedFiles) {
-            const options = {
-                series: [{
-                    name: 'Core Framework',
-                    data: [coreFiles]
-                }, {
-                    name: 'Your Additions',
-                    data: [addedFiles]
-                }],
-                chart: {
-                    type: 'bar',
-                    height: 250,
-                    stacked: true,
-                    background: 'transparent',
-                    toolbar: {
-                        show: false
-                    }
-                },
-                plotOptions: {
-                    bar: {
-                        horizontal: true,
-                        barHeight: '40%'
-                    }
-                },
-                colors: ['#00ff9d', '#ff9d00'],
-                xaxis: {
-                    categories: ['Framework Files'],
-                    labels: {
-                        style: {
-                            colors: '#e0e0e0'
-                        }
-                    }
-                },
-                yaxis: {
-                    labels: {
-                        style: {
-                            colors: '#e0e0e0'
-                        }
-                    }
-                },
-                dataLabels: {
-                    enabled: true,
-                    style: {
-                        colors: ['#000']
-                    }
-                },
-                legend: {
-                    position: 'top',
-                    horizontalAlign: 'left',
-                    labels: {
-                        colors: '#e0e0e0'
-                    }
-                },
-                tooltip: {
-                    theme: 'dark'
-                }
-            };
-
-            const chart = new ApexCharts(document.querySelector("#comparisonChart"), options);
-            chart.render();
-        }
-
         async function loadNodeModulesBreakdown() {
             try {
                 const response = await fetch('/api/workspace/node-modules-breakdown');
                 const data = await response.json();
 
-                if (!data.success || !data.packages || data.packages.length === 0) {
+                if (!data.success || !data.items || data.items.length === 0) {
                     document.getElementById('nodeModulesChart').innerHTML =
-                        '<p style="text-align: center; color: #888; padding: 40px;">No node_modules data available</p>';
+                        '<p style="text-align: center; color: #888; padding: 40px;">No data available</p>';
                     return;
                 }
 
-                renderNodeModulesTreemap(data.packages.slice(0, 20)); // Top 20
+                renderFrameworkTreemap(data.items);
             } catch (error) {
-                console.error('Error loading node_modules breakdown:', error);
+                console.error('Error loading framework breakdown:', error);
                 document.getElementById('nodeModulesChart').innerHTML =
-                    '<p style="text-align: center; color: #888; padding: 40px;">Error loading node_modules data</p>';
+                    '<p style="text-align: center; color: #888; padding: 40px;">Error loading data</p>';
             }
         }
 
-        function renderNodeModulesTreemap(packages) {
+        function renderFrameworkTreemap(items) {
             // Color mapping by category
             const categoryColors = {
-                'electron': '#00d9ff',
-                'build': '#ff9d00',
-                'database': '#00ff9d',
-                'ui': '#ff5722',
-                'testing': '#9c27b0',
-                'other': '#666'
+                'node_modules': '#ff9d00',
+                'framework': '#00ff9d'
             };
 
             // Prepare data for treemap
             const series = [{
-                data: packages.map(pkg => ({
-                    x: pkg.name,
-                    y: pkg.sizeMB,
-                    fillColor: categoryColors[pkg.category] || categoryColors.other
+                data: items.map(item => ({
+                    x: item.name,
+                    y: item.sizeMB,
+                    fillColor: categoryColors[item.category] || '#666'
                 }))
             }];
 
@@ -814,7 +473,7 @@
                     markers: {
                         fillColors: Object.values(categoryColors)
                     },
-                    customLegendItems: ['Electron', 'Build Tools', 'Database', 'UI', 'Testing', 'Other']
+                    customLegendItems: ['node_modules (dependencies)', 'Framework Code']
                 },
                 tooltip: {
                     theme: 'dark',
