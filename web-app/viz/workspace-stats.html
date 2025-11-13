@@ -149,6 +149,7 @@
         <div id="error" class="error" style="display: none;"></div>
 
         <div id="stats-content" style="display: none;">
+            <h2 style="color: #00d9ff; margin-bottom: 20px; font-size: 1.5em;">Instance Stats</h2>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-label">Git Repo (.git)</div>
@@ -190,6 +191,27 @@
                     <div class="stat-label">Database Files</div>
                     <div class="stat-value" id="db-count">0</div>
                     <div class="stat-sub" id="db-size">0 MB</div>
+                </div>
+            </div>
+
+            <h2 style="color: #00ff9d; margin: 40px 0 20px 0; font-size: 1.5em;">Framework Stats (Synced)</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Framework Files</div>
+                    <div class="stat-value" id="framework-files">0</div>
+                    <div class="stat-sub">tools/ + web-app/ + electron-app/</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Framework Size</div>
+                    <div class="stat-value" id="framework-size">0 MB</div>
+                    <div class="stat-sub">Synced from localbase.ai</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Last Sync</div>
+                    <div class="stat-value" id="last-sync">—</div>
+                    <div class="stat-sub">Framework update</div>
                 </div>
             </div>
 
@@ -248,6 +270,17 @@
                 document.getElementById('connector-count').textContent = stats.connectorCount || 0;
                 document.getElementById('db-count').textContent = stats.databaseCount || 0;
                 document.getElementById('db-size').textContent = stats.databaseSize || '0B';
+
+                // Load framework stats
+                const frameworkResponse = await fetch('/api/workspace/framework-stats');
+                const frameworkData = await frameworkResponse.json();
+
+                if (frameworkData.success) {
+                    const fwStats = frameworkData.frameworkStats;
+                    document.getElementById('framework-files').textContent = fwStats.files || 0;
+                    document.getElementById('framework-size').textContent = fwStats.size || 'N/A';
+                    document.getElementById('last-sync').textContent = fwStats.lastSync || '—';
+                }
 
                 // Load visualizations for charts
                 const vizResponse = await fetch('/api/viz');

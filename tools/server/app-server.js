@@ -861,6 +861,84 @@ app.get('/api/workspace/stats', (req, res) => {
 });
 
 /**
+ * GET /api/workspace/framework-stats
+ * Returns framework-specific statistics (tools/, web-app/, electron-app/)
+ */
+app.get('/api/workspace/framework-stats', (req, res) => {
+  try {
+    const frameworkDirs = ['tools', 'web-app', 'electron-app', 'scripts'];
+    let totalFiles = 0;
+    let totalSize = 0;
+    let lastModified = null;
+
+    frameworkDirs.forEach(dir => {
+      const dirPath = join(currentWorkspace, dir);
+      if (existsSync(dirPath)) {
+        try {
+          // Count files
+          const fileCount = execSync(`find "${dirPath}" -type f 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
+          totalFiles += parseInt(fileCount) || 0;
+
+          // Get size
+          const dirSize = execSync(`du -sk "${dirPath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+          totalSize += parseInt(dirSize) || 0;
+
+          // Get last modified time
+          const modTime = statSync(dirPath).mtime;
+          if (!lastModified || modTime > lastModified) {
+            lastModified = modTime;
+          }
+        } catch (e) {
+          // Skip if directory doesn't exist
+        }
+      }
+    });
+
+    // Format size
+    let formattedSize;
+    if (totalSize < 1024) {
+      formattedSize = totalSize + 'K';
+    } else if (totalSize < 1024 * 1024) {
+      formattedSize = Math.round(totalSize / 1024) + 'M';
+    } else {
+      formattedSize = (totalSize / 1024 / 1024).toFixed(1) + 'G';
+    }
+
+    // Format last modified
+    const now = new Date();
+    const diffMs = now - lastModified;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    let lastSyncFormatted = '—';
+    if (lastModified) {
+      if (diffDays === 0) {
+        lastSyncFormatted = 'Today';
+      } else if (diffDays === 1) {
+        lastSyncFormatted = 'Yesterday';
+      } else if (diffDays < 7) {
+        lastSyncFormatted = diffDays + ' days ago';
+      } else {
+        lastSyncFormatted = lastModified.toLocaleDateString();
+      }
+    }
+
+    res.json({
+      success: true,
+      frameworkStats: {
+        files: totalFiles,
+        size: formattedSize,
+        lastSync: lastSyncFormatted
+      }
+    });
+  } catch (error) {
+    console.error('Error getting framework stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /health
  * Health check endpoint
  */
