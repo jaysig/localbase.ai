@@ -21,7 +21,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
@@ -47,9 +47,155 @@
             color: #888;
         }
 
+        /* Hero Section - Side by Side Comparison */
+        .hero-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+
+        .comparison-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 16px;
+            padding: 32px;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .comparison-card.framework {
+            border-color: rgba(0, 255, 157, 0.3);
+        }
+
+        .comparison-card.unhooked {
+            border-color: rgba(255, 157, 0, 0.3);
+        }
+
+        .comparison-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #00d9ff, #00ff9d);
+        }
+
+        .comparison-card.framework::before {
+            background: linear-gradient(90deg, #00ff9d, #00d9ff);
+        }
+
+        .comparison-card.unhooked::before {
+            background: linear-gradient(90deg, #ff9d00, #ff5722);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .card-icon {
+            font-size: 2.5em;
+            margin-right: 16px;
+        }
+
+        .card-title {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .framework .card-title {
+            background: linear-gradient(135deg, #00ff9d, #00d9ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .unhooked .card-title {
+            background: linear-gradient(135deg, #ff9d00, #ff5722);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .card-subtitle {
+            color: #888;
+            font-size: 0.95em;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .size-display {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 24px;
+        }
+
+        .size-number {
+            font-size: 4em;
+            font-weight: bold;
+            color: #00d9ff;
+            margin-right: 12px;
+        }
+
+        .framework .size-number {
+            color: #00ff9d;
+        }
+
+        .unhooked .size-number {
+            color: #ff9d00;
+        }
+
+        .size-unit {
+            font-size: 1.5em;
+            color: #666;
+        }
+
+        .breakdown-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .breakdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .breakdown-label {
+            color: #aaa;
+            display: flex;
+            align-items: center;
+        }
+
+        .breakdown-label::before {
+            content: '📁';
+            margin-right: 8px;
+        }
+
+        .breakdown-value {
+            font-weight: bold;
+            color: #00d9ff;
+        }
+
+        .framework .breakdown-value {
+            color: #00ff9d;
+        }
+
+        .unhooked .breakdown-value {
+            color: #ff9d00;
+        }
+
+        /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin-bottom: 40px;
         }
@@ -58,7 +204,7 @@
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(0, 217, 255, 0.2);
             border-radius: 12px;
-            padding: 24px;
+            padding: 20px;
             backdrop-filter: blur(10px);
             transition: transform 0.2s, border-color 0.2s;
         }
@@ -69,21 +215,29 @@
         }
 
         .stat-label {
-            font-size: 0.9em;
+            font-size: 0.85em;
             color: #888;
             margin-bottom: 8px;
         }
 
         .stat-value {
-            font-size: 2em;
+            font-size: 1.8em;
             font-weight: bold;
             color: #00d9ff;
         }
 
         .stat-sub {
-            font-size: 0.85em;
+            font-size: 0.8em;
             color: #666;
             margin-top: 4px;
+        }
+
+        /* Chart Containers */
+        .chart-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
         }
 
         .chart-container {
@@ -91,138 +245,185 @@
             border: 1px solid rgba(0, 217, 255, 0.2);
             border-radius: 12px;
             padding: 24px;
-            margin-bottom: 20px;
             backdrop-filter: blur(10px);
+        }
+
+        .chart-container.full-width {
+            grid-column: 1 / -1;
         }
 
         .chart-title {
             font-size: 1.3em;
             color: #00d9ff;
             margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .section-header {
+            font-size: 1.8em;
+            color: #00ff9d;
+            margin: 50px 0 25px 0;
+            font-weight: bold;
             text-align: center;
         }
 
+        /* File Tree Visual */
+        .file-tree {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+            color: #aaa;
+        }
+
+        .file-tree-item {
+            padding: 4px 0;
+            padding-left: 20px;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            margin-left: 10px;
+        }
+
+        .file-tree-item.root {
+            border-left: none;
+            padding-left: 0;
+            margin-left: 0;
+            color: #00d9ff;
+            font-weight: bold;
+        }
+
+        .file-tree-item.dir {
+            color: #00ff9d;
+        }
+
+        .file-count {
+            color: #666;
+            font-size: 0.85em;
+            margin-left: 8px;
+        }
+
         .important-note {
-            background: rgba(0, 217, 255, 0.1);
-            border-left: 4px solid #00d9ff;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 30px;
+            background: rgba(255, 157, 0, 0.1);
+            border: 1px solid rgba(255, 157, 0, 0.3);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 40px;
         }
 
         .important-note h3 {
-            color: #00d9ff;
+            color: #ff9d00;
             margin-bottom: 12px;
         }
 
         .important-note p {
-            line-height: 1.6;
             color: #ccc;
+            line-height: 1.6;
         }
 
-        .important-note code {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 2px 6px;
-            border-radius: 4px;
-            color: #00ff9d;
-        }
-
-        .error {
-            background: rgba(255, 107, 107, 0.1);
-            border: 1px solid rgba(255, 107, 107, 0.3);
-            border-radius: 8px;
-            padding: 20px;
-            color: #ff6b6b;
-            text-align: center;
+        @media (max-width: 968px) {
+            .hero-comparison,
+            .chart-row {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 id="workspace-name">Workspace Stats</h1>
-        <div class="subtitle" id="workspace-path">Loading workspace information...</div>
+        <p class="subtitle" id="workspace-path">Loading...</p>
 
-        <div id="loading" class="loading">
-            📊 Loading workspace statistics...
+        <div class="loading" id="loading">
+            Loading workspace statistics...
         </div>
 
-        <div id="error" class="error" style="display: none;"></div>
-
         <div id="stats-content" style="display: none;">
-            <h2 style="color: #00d9ff; margin-bottom: 20px; font-size: 1.5em;">Instance Stats</h2>
+            <!-- Hero Comparison: Framework vs Unhooked -->
+            <div class="hero-comparison">
+                <div class="comparison-card framework">
+                    <div class="card-header">
+                        <div class="card-icon">🔗</div>
+                        <div>
+                            <div class="card-title">Framework Connected</div>
+                        </div>
+                    </div>
+                    <div class="card-subtitle">
+                        Your workspace synced with the LocalBase framework. Full-featured IDE, live updates, and ecosystem tools.
+                    </div>
+                    <div class="size-display">
+                        <div class="size-number" id="framework-total-size">0</div>
+                        <div class="size-unit">MB</div>
+                    </div>
+                    <ul class="breakdown-list">
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Core Framework</span>
+                            <span class="breakdown-value" id="framework-core-size">0 MB</span>
+                        </li>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Instance Code</span>
+                            <span class="breakdown-value" id="framework-instance-code">0 MB</span>
+                        </li>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Your Data</span>
+                            <span class="breakdown-value" id="framework-data-size">0 MB</span>
+                        </li>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Dependencies</span>
+                            <span class="breakdown-value" id="framework-deps-size">0 MB</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="comparison-card unhooked">
+                    <div class="card-header">
+                        <div class="card-icon">📦</div>
+                        <div>
+                            <div class="card-title">Unhooked Mode</div>
+                        </div>
+                    </div>
+                    <div class="card-subtitle">
+                        Your data if you disconnect from the framework. Everything you need: databases, connectors, and visualizations.
+                    </div>
+                    <div class="size-display">
+                        <div class="size-number" id="unhooked-total-size">0</div>
+                        <div class="size-unit">MB</div>
+                    </div>
+                    <ul class="breakdown-list">
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Databases</span>
+                            <span class="breakdown-value" id="unhooked-db-size">0 MB</span>
+                        </li>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Connectors</span>
+                            <span class="breakdown-value" id="unhooked-connector-size">0 MB</span>
+                        </li>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Visualizations</span>
+                            <span class="breakdown-value" id="unhooked-viz-size">0 MB</span>
+                        </li>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Environment</span>
+                            <span class="breakdown-value" id="unhooked-env-size">0 KB</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
             <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">Git Repo (.git)</div>
-                    <div class="stat-value" id="git-size">0 MB</div>
-                    <div class="stat-sub">What gets cloned</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-label">Tracked Files</div>
-                    <div class="stat-value" id="tracked-files">0</div>
-                    <div class="stat-sub">In version control</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-label">Code + Assets</div>
-                    <div class="stat-value" id="code-size">0 MB</div>
-                    <div class="stat-sub">Excluding node_modules</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-label">node_modules</div>
-                    <div class="stat-value" id="node-size">0 GB</div>
-                    <div class="stat-sub">Ignored by Git</div>
-                </div>
-
                 <div class="stat-card">
                     <div class="stat-label">Visualizations</div>
                     <div class="stat-value" id="viz-count">0</div>
                     <div class="stat-sub">Charts & dashboards</div>
                 </div>
-
                 <div class="stat-card">
                     <div class="stat-label">Connectors</div>
                     <div class="stat-value" id="connector-count">0</div>
                     <div class="stat-sub">Data sources</div>
                 </div>
-
                 <div class="stat-card">
                     <div class="stat-label">Database Files</div>
                     <div class="stat-value" id="db-count">0</div>
                     <div class="stat-sub" id="db-size">0 MB</div>
                 </div>
-            </div>
-
-            <h2 style="color: #00ff9d; margin: 40px 0 20px 0; font-size: 1.5em;">Core Framework (Source)</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">Core Files</div>
-                    <div class="stat-value" id="core-files">0</div>
-                    <div class="stat-sub">localbase.ai source</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-label">Core Size</div>
-                    <div class="stat-value" id="core-size">0 MB</div>
-                    <div class="stat-sub">Framework only</div>
-                </div>
-            </div>
-
-            <h2 style="color: #ff9d00; margin: 40px 0 20px 0; font-size: 1.5em;">Instance Framework (Synced + Additions)</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">Total Files</div>
-                    <div class="stat-value" id="instance-files">0</div>
-                    <div class="stat-sub">Framework + instance additions</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-label">Total Size</div>
-                    <div class="stat-value" id="instance-size">0 MB</div>
-                    <div class="stat-sub">Including customizations</div>
-                </div>
-
                 <div class="stat-card">
                     <div class="stat-label">Last Sync</div>
                     <div class="stat-value" id="last-sync">—</div>
@@ -230,20 +431,31 @@
                 </div>
             </div>
 
-            <div class="chart-container">
-                <div class="chart-title">Visualization Types</div>
-                <div id="vizTypeChart"></div>
+            <!-- Visual Breakdowns -->
+            <div class="section-header">📊 Visual Breakdown</div>
+
+            <div class="chart-row">
+                <div class="chart-container">
+                    <div class="chart-title">Framework Files Distribution</div>
+                    <div id="frameworkFilesChart"></div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Storage Breakdown</div>
+                    <div id="storageChart"></div>
+                </div>
             </div>
 
-            <div class="chart-container">
-                <div class="chart-title">Data Sources</div>
-                <div id="connectorsChart"></div>
+            <div class="chart-container full-width">
+                <div class="chart-title">Core Framework vs Instance Additions</div>
+                <div id="comparisonChart"></div>
             </div>
 
             <div class="important-note">
-                <h3>📦 About This Workspace</h3>
-                <p id="workspace-info">
-                    This workspace contains real-time statistics that update automatically when you refresh the page.
+                <h3>🔓 About Unhooking</h3>
+                <p>
+                    LocalBase is designed for data mobility. Your data stays local, always. If you ever want to disconnect from the framework,
+                    you keep everything important: your databases (SQLite files), connectors (JavaScript), visualizations (HTML), and credentials (env.local).
+                    The framework provides the IDE and tools, but your data is never locked in. Export, migrate, or run standalone anytime.
                 </p>
             </div>
         </div>
@@ -276,166 +488,250 @@
 
                 const stats = statsData.stats;
 
-                // Update all stat cards
-                document.getElementById('git-size').textContent = stats.gitRepoSize || 'N/A';
-                document.getElementById('tracked-files').textContent = stats.trackedFiles || 0;
-                document.getElementById('code-size').textContent = stats.codeSize || 'N/A';
-                document.getElementById('node-size').textContent = stats.nodeModulesSize || 'N/A';
-                document.getElementById('viz-count').textContent = stats.visualizationCount || 0;
-                document.getElementById('connector-count').textContent = stats.connectorCount || 0;
-                document.getElementById('db-count').textContent = stats.databaseCount || 0;
-                document.getElementById('db-size').textContent = stats.databaseSize || '0B';
-
                 // Load framework stats
                 const frameworkResponse = await fetch('/api/workspace/framework-stats');
                 const frameworkData = await frameworkResponse.json();
 
-                if (frameworkData.success) {
-                    // Core framework stats (from localbase.ai)
-                    const coreStats = frameworkData.coreFramework;
-                    document.getElementById('core-files').textContent = coreStats.files || 0;
-                    document.getElementById('core-size').textContent = coreStats.size || 'N/A';
-
-                    // Instance framework stats (synced + additions)
-                    const instanceStats = frameworkData.instanceFramework;
-                    document.getElementById('instance-files').textContent = instanceStats.files || 0;
-                    document.getElementById('instance-size').textContent = instanceStats.size || 'N/A';
-                    document.getElementById('last-sync').textContent = instanceStats.lastSync || '—';
+                if (!frameworkData.success) {
+                    throw new Error('Failed to get framework stats');
                 }
 
-                // Load visualizations for charts
-                const vizResponse = await fetch('/api/viz');
-                const vizData = await vizResponse.json();
-                const visualizations = vizData.visualizations || [];
+                const coreStats = frameworkData.coreFramework;
+                const instanceStats = frameworkData.instanceFramework;
 
-                // Count visualization types
-                const vizTypes = {};
-                visualizations.forEach(viz => {
-                    const type = viz.type || 'other';
-                    vizTypes[type] = (vizTypes[type] || 0) + 1;
-                });
+                // Calculate sizes
+                const parseSize = (sizeStr) => {
+                    if (!sizeStr) return 0;
+                    const num = parseFloat(sizeStr);
+                    if (sizeStr.includes('G')) return num * 1024;
+                    if (sizeStr.includes('M')) return num;
+                    if (sizeStr.includes('K')) return num / 1024;
+                    return num;
+                };
 
-                // Get libraries for chart
-                const libraries = new Set();
-                visualizations.forEach(viz => {
-                    if (viz.library) libraries.add(viz.library);
-                });
+                const coreSizeMB = parseSize(coreStats.size);
+                const instanceSizeMB = parseSize(instanceStats.size);
+                const codeSizeMB = parseSize(stats.codeSize);
+                const dbSizeMB = parseSize(stats.databaseSize);
+                const nodeModulesMB = parseSize(stats.nodeModulesSize);
 
-                // Create visualization types chart
-                const vizTypeLabels = Object.keys(vizTypes);
-                const vizTypeCounts = Object.values(vizTypes);
+                // Framework Connected breakdown
+                const instanceCodeSize = instanceSizeMB - coreSizeMB;
+                const frameworkTotalSize = instanceSizeMB + dbSizeMB + nodeModulesMB;
 
-                if (vizTypeLabels.length > 0) {
-                    const vizTypeOptions = {
-                        series: vizTypeCounts,
-                        chart: {
-                            type: 'donut',
-                            height: 350,
-                            background: 'transparent',
-                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto'
-                        },
-                        labels: vizTypeLabels.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
-                        colors: ['#00d9ff', '#00ff9d', '#ff6b6b', '#ffd93d', '#a29bfe'],
-                        theme: {
-                            mode: 'dark'
-                        },
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                colors: '#e0e0e0'
-                            }
-                        },
-                        dataLabels: {
-                            enabled: true,
-                            style: {
-                                colors: ['#1a1a2e']
-                            }
-                        }
-                    };
+                document.getElementById('framework-total-size').textContent = Math.round(frameworkTotalSize);
+                document.getElementById('framework-core-size').textContent = Math.round(coreSizeMB) + ' MB';
+                document.getElementById('framework-instance-code').textContent = Math.round(instanceCodeSize) + ' MB';
+                document.getElementById('framework-data-size').textContent = Math.round(dbSizeMB) + ' MB';
+                document.getElementById('framework-deps-size').textContent = Math.round(nodeModulesMB) + ' MB';
 
-                    const vizTypeChart = new ApexCharts(document.getElementById('vizTypeChart'), vizTypeOptions);
-                    vizTypeChart.render();
-                }
+                // Unhooked Mode breakdown (data + connectors + viz)
+                // Estimate connector and viz sizes (typically small)
+                const connectorSizeMB = 1; // connectors are typically ~1MB
+                const vizSizeMB = stats.visualizationCount * 0.05; // ~50KB per viz
+                const unhookedTotalSize = dbSizeMB + connectorSizeMB + vizSizeMB + 0.01; // +env.local
 
-                // Create connectors chart
-                if (libraries.size > 0) {
-                    const libraryArray = Array.from(libraries);
-                    const libraryCounts = libraryArray.map(lib => {
-                        return visualizations.filter(v => v.library === lib).length;
-                    });
+                document.getElementById('unhooked-total-size').textContent = Math.round(unhookedTotalSize);
+                document.getElementById('unhooked-db-size').textContent = Math.round(dbSizeMB) + ' MB';
+                document.getElementById('unhooked-connector-size').textContent = connectorSizeMB.toFixed(1) + ' MB';
+                document.getElementById('unhooked-viz-size').textContent = vizSizeMB.toFixed(1) + ' MB';
+                document.getElementById('unhooked-env-size').textContent = '10 KB';
 
-                    const connectorsOptions = {
-                        series: [{
-                            name: 'Visualizations',
-                            data: libraryCounts
-                        }],
-                        chart: {
-                            type: 'bar',
-                            height: 300,
-                            background: 'transparent',
-                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto'
-                        },
-                        plotOptions: {
-                            bar: {
-                                borderRadius: 8,
-                                horizontal: true,
-                                distributed: false,
-                                colors: {
-                                    backgroundBarColors: ['rgba(255, 255, 255, 0.05)']
-                                }
-                            }
-                        },
-                        colors: ['#00d9ff'],
-                        dataLabels: {
-                            enabled: false
-                        },
-                        xaxis: {
-                            categories: libraryArray.map(l => l.charAt(0).toUpperCase() + l.slice(1)),
-                            labels: {
-                                style: {
-                                    colors: '#e0e0e0'
-                                }
-                            }
-                        },
-                        yaxis: {
-                            labels: {
-                                style: {
-                                    colors: '#e0e0e0'
-                                }
-                            }
-                        },
-                        grid: {
-                            borderColor: 'rgba(255, 255, 255, 0.1)'
-                        },
-                        theme: {
-                            mode: 'dark'
-                        }
-                    };
+                // Quick stats
+                document.getElementById('viz-count').textContent = stats.visualizationCount || 0;
+                document.getElementById('connector-count').textContent = stats.connectorCount || 0;
+                document.getElementById('db-count').textContent = stats.databaseCount || 0;
+                document.getElementById('db-size').textContent = stats.databaseSize || '0B';
+                document.getElementById('last-sync').textContent = instanceStats.lastSync || '—';
 
-                    const connectorsChart = new ApexCharts(document.getElementById('connectorsChart'), connectorsOptions);
-                    connectorsChart.render();
-                }
+                // Charts
+                renderFrameworkFilesChart(coreStats.files, instanceStats.files);
+                renderStorageChart(coreSizeMB, instanceCodeSize, dbSizeMB, nodeModulesMB);
+                renderComparisonChart(coreStats.files, instanceStats.files - coreStats.files);
 
-                // Update workspace info
-                document.getElementById('workspace-info').innerHTML = `
-                    This <strong>${workspaceName}</strong> workspace contains <strong>${visualizations.length} visualizations</strong>
-                    using <strong>${libraries.size} different libraries</strong>.
-                    Statistics are loaded from <code>${workspacePath}</code> and update when you refresh this page.
-                `;
-
-                // Show content, hide loading
+                // Show content
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('stats-content').style.display = 'block';
 
             } catch (error) {
                 console.error('Error loading workspace stats:', error);
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('error').textContent = `Error: ${error.message}`;
+                document.getElementById('loading').textContent = 'Error loading workspace stats: ' + error.message;
             }
         }
 
-        // Load stats when page loads
+        function renderFrameworkFilesChart(coreFiles, totalFiles) {
+            const addedFiles = totalFiles - coreFiles;
+
+            const options = {
+                series: [coreFiles, addedFiles],
+                chart: {
+                    type: 'donut',
+                    height: 300,
+                    background: 'transparent'
+                },
+                labels: ['Core Framework', 'Instance Additions'],
+                colors: ['#00ff9d', '#ff9d00'],
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        colors: '#e0e0e0'
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    style: {
+                        colors: ['#000']
+                    }
+                },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            labels: {
+                                show: true,
+                                total: {
+                                    show: true,
+                                    label: 'Total Files',
+                                    color: '#e0e0e0'
+                                }
+                            }
+                        }
+                    }
+                },
+                tooltip: {
+                    theme: 'dark'
+                }
+            };
+
+            const chart = new ApexCharts(document.querySelector("#frameworkFilesChart"), options);
+            chart.render();
+        }
+
+        function renderStorageChart(core, instance, data, deps) {
+            const options = {
+                series: [{
+                    name: 'Size (MB)',
+                    data: [
+                        Math.round(core),
+                        Math.round(instance),
+                        Math.round(data),
+                        Math.round(deps)
+                    ]
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 300,
+                    background: 'transparent',
+                    toolbar: {
+                        show: false
+                    }
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        distributed: true,
+                        barHeight: '60%'
+                    }
+                },
+                colors: ['#00ff9d', '#ff9d00', '#00d9ff', '#666'],
+                xaxis: {
+                    categories: ['Core Framework', 'Your Code', 'Databases', 'Dependencies'],
+                    labels: {
+                        style: {
+                            colors: '#e0e0e0'
+                        }
+                    }
+                },
+                yaxis: {
+                    labels: {
+                        style: {
+                            colors: '#e0e0e0'
+                        }
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    style: {
+                        colors: ['#000']
+                    },
+                    formatter: function(val) {
+                        return val + ' MB';
+                    }
+                },
+                legend: {
+                    show: false
+                },
+                tooltip: {
+                    theme: 'dark'
+                }
+            };
+
+            const chart = new ApexCharts(document.querySelector("#storageChart"), options);
+            chart.render();
+        }
+
+        function renderComparisonChart(coreFiles, addedFiles) {
+            const options = {
+                series: [{
+                    name: 'Core Framework',
+                    data: [coreFiles]
+                }, {
+                    name: 'Your Additions',
+                    data: [addedFiles]
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 250,
+                    stacked: true,
+                    background: 'transparent',
+                    toolbar: {
+                        show: false
+                    }
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        barHeight: '40%'
+                    }
+                },
+                colors: ['#00ff9d', '#ff9d00'],
+                xaxis: {
+                    categories: ['Framework Files'],
+                    labels: {
+                        style: {
+                            colors: '#e0e0e0'
+                        }
+                    }
+                },
+                yaxis: {
+                    labels: {
+                        style: {
+                            colors: '#e0e0e0'
+                        }
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    style: {
+                        colors: ['#000']
+                    }
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'left',
+                    labels: {
+                        colors: '#e0e0e0'
+                    }
+                },
+                tooltip: {
+                    theme: 'dark'
+                }
+            };
+
+            const chart = new ApexCharts(document.querySelector("#comparisonChart"), options);
+            chart.render();
+        }
+
+        // Load stats on page load
         loadWorkspaceStats();
     </script>
 </body>
