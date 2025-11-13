@@ -598,19 +598,132 @@
             flex: 1;
             min-width: 0;
         }
+
+        /* Cmd+K Workspace Switcher Modal */
+        .workspace-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .workspace-modal-overlay.active {
+            display: flex;
+        }
+
+        .workspace-modal {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .workspace-modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .workspace-modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #e5e5e5;
+        }
+
+        .workspace-modal-header .shortcut-hint {
+            font-size: 12px;
+            color: #666;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .workspace-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .workspace-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #2a2a2a;
+            transition: all 0.2s;
+        }
+
+        .workspace-item:hover {
+            background: #2a2a2a;
+        }
+
+        .workspace-item.selected {
+            background: #667eea;
+            color: #fff;
+        }
+
+        .workspace-item.active-workspace::after {
+            content: '✓';
+            color: #00d9ff;
+            font-weight: bold;
+        }
+
+        .workspace-item.selected.active-workspace::after {
+            color: #fff;
+        }
+
+        .workspace-name {
+            font-size: 14px;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .workspace-modal-footer {
+            padding: 12px 20px;
+            border-top: 1px solid #333;
+            background: #0a0a0a;
+            display: flex;
+            gap: 20px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        .workspace-modal-footer .shortcut {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .workspace-modal-footer kbd {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1 onclick="goHome()" style="cursor: pointer; margin: 0;">LocalBase</h1>
         <div style="display: flex; align-items: center;">
-            <div style="background: #2a2a2a; padding: 6px 12px; border-radius: 4px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #667eea; border: 1px solid #333; display: flex; align-items: center; gap: 8px;">
+            <button onclick="openWorkspaceModal()" style="background: #2a2a2a; padding: 6px 12px; border-radius: 4px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #667eea; border: 1px solid #333; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <span style="color: #999;">//</span>
-                <select id="workspace-selector" style="background: transparent; border: none; color: #667eea; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; cursor: pointer; outline: none; padding: 0;">
-                    <option value="">Loading workspaces...</option>
-                </select>
+                <span id="current-workspace-name">my-workspace</span>
+                <span style="color: #555;">•</span>
+                <span style="color: #888;">⌘ + K</span>
                 <span style="color: #999;">//</span>
-            </div>
+            </button>
         </div>
     </div>
     
@@ -747,9 +860,6 @@
         async function loadCharts() {
 
             try {
-                // Load workspace info
-                loadWorkspaceInfo();
-
                 // Load visualizations from single source
                 try {
                     console.log('🔥 FETCHING VISUALIZATIONS...');
@@ -859,7 +969,7 @@
 
                 console.log('🔥 RENDERING ITEM:', viz.title, 'type:', viz.type, 'icon:', typeIcon);
                 items.push(`
-                    <div class="${cardClass}" onclick="showEmbeddedChart('${viz.url}', '${viz.title || viz.name || 'Untitled'}', true, '${viz.id}')">
+                    <div class="${cardClass}" tabindex="0" onclick="showEmbeddedChart('${viz.url}', '${viz.title || viz.name || 'Untitled'}', true, '${viz.id}')">
                         ${badge}
                         <div class="chart-preview">
                             <iframe src="${viz.url}?preview=true" loading="lazy"></iframe>
@@ -1042,14 +1152,251 @@
             console.log(`🔥 CYCLED WORKSPACE ${direction.toUpperCase()}: ${options[newIndex].text}`);
         }
 
+        // Workspace Modal State
+        let workspaceModalOpen = false;
+        let workspaceModalSelectedIndex = 0;
+        let workspaceModalItems = [];
+
+        async function openWorkspaceModal() {
+            try {
+                // Fetch workspaces
+                const response = await fetch('/api/workspaces');
+                const data = await response.json();
+
+                if (!data.success || !data.workspaces) {
+                    console.error('Failed to load workspaces');
+                    return;
+                }
+
+                // Sort workspaces: my-workspace first, then alphabetically
+                workspaceModalItems = data.workspaces.sort((a, b) => {
+                    if (a.name === 'my-workspace') return -1;
+                    if (b.name === 'my-workspace') return 1;
+                    return a.name.localeCompare(b.name);
+                });
+
+                // Find active workspace index
+                const activeIndex = workspaceModalItems.findIndex(w => w.active);
+                workspaceModalSelectedIndex = activeIndex >= 0 ? activeIndex : 0;
+
+                // Update button with current workspace name
+                const currentWorkspace = workspaceModalItems[workspaceModalSelectedIndex];
+                document.getElementById('current-workspace-name').textContent = currentWorkspace.name;
+
+                // Render workspace list
+                renderWorkspaceModal();
+
+                // Show modal
+                const overlay = document.getElementById('workspace-modal-overlay');
+                overlay.classList.add('active');
+                workspaceModalOpen = true;
+
+                // Focus search input to disable Vimium hotkeys
+                const searchInput = document.getElementById('workspace-modal-input');
+                setTimeout(() => {
+                    searchInput.value = '';
+                    searchInput.focus();
+                }, 0);
+
+                // Add search filtering
+                searchInput.oninput = (e) => {
+                    const filter = e.target.value.toLowerCase();
+                    const items = document.querySelectorAll('.workspace-item');
+                    items.forEach((item, index) => {
+                        const name = workspaceModalItems[index].name.toLowerCase();
+                        if (name.includes(filter)) {
+                            item.style.display = '';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                };
+
+                // Add dedicated keydown handler on the input for Tab/Shift+Tab navigation
+                searchInput.onkeydown = (e) => {
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            navigateWorkspaceModal('up');
+                        } else {
+                            navigateWorkspaceModal('down');
+                        }
+                    } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        navigateWorkspaceModal('down');
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        navigateWorkspaceModal('up');
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        selectWorkspace();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        closeWorkspaceModal();
+                    }
+                };
+
+                console.log('🔥 Workspace modal opened');
+            } catch (error) {
+                console.error('Error opening workspace modal:', error);
+            }
+        }
+
+        function closeWorkspaceModal() {
+            const overlay = document.getElementById('workspace-modal-overlay');
+            overlay.classList.remove('active');
+            workspaceModalOpen = false;
+            console.log('🔥 Workspace modal closed');
+        }
+
+        function renderWorkspaceModal() {
+            const list = document.getElementById('workspace-modal-list');
+            list.innerHTML = '';
+
+            workspaceModalItems.forEach((workspace, index) => {
+                const item = document.createElement('div');
+                item.className = 'workspace-item';
+                if (index === workspaceModalSelectedIndex) {
+                    item.classList.add('selected');
+                }
+                if (workspace.active) {
+                    item.classList.add('active-workspace');
+                }
+
+                const name = document.createElement('span');
+                name.className = 'workspace-name';
+                name.textContent = workspace.name;
+                item.appendChild(name);
+
+                // Click handler
+                item.addEventListener('click', () => {
+                    selectWorkspace(index);
+                });
+
+                list.appendChild(item);
+            });
+
+            // Scroll selected item into view
+            const selectedItem = list.querySelector('.workspace-item.selected');
+            if (selectedItem) {
+                selectedItem.scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function navigateWorkspaceModal(direction) {
+            if (direction === 'up' || direction === 'k') {
+                workspaceModalSelectedIndex = Math.max(0, workspaceModalSelectedIndex - 1);
+            } else if (direction === 'down' || direction === 'j') {
+                workspaceModalSelectedIndex = Math.min(workspaceModalItems.length - 1, workspaceModalSelectedIndex + 1);
+            }
+            renderWorkspaceModal();
+        }
+
+        async function selectWorkspace(index = workspaceModalSelectedIndex) {
+            if (index < 0 || index >= workspaceModalItems.length) return;
+
+            const workspace = workspaceModalItems[index];
+            closeWorkspaceModal();
+
+            // Update button with new workspace name
+            document.getElementById('current-workspace-name').textContent = workspace.name;
+
+            // Switch workspace using existing function
+            await switchWorkspace(workspace.path);
+        }
+
         function setupKeyboardShortcuts() {
             document.addEventListener('keydown', (event) => {
+                // Handle workspace modal navigation
+                if (workspaceModalOpen) {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        closeWorkspaceModal();
+                        return;
+                    }
+
+                    if (event.key === 'ArrowUp' || event.key === 'k') {
+                        event.preventDefault();
+                        navigateWorkspaceModal('up');
+                        return;
+                    }
+
+                    if (event.key === 'ArrowDown' || event.key === 'j') {
+                        event.preventDefault();
+                        navigateWorkspaceModal('down');
+                        return;
+                    }
+
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        selectWorkspace();
+                        return;
+                    }
+
+                    return; // Block other shortcuts when modal is open
+                }
+
                 // Check if user is typing in an input field
                 const isTyping = event.target.tagName === 'INPUT' ||
                                event.target.tagName === 'TEXTAREA' ||
                                event.target.contentEditable === 'true';
 
                 if (isTyping) return; // Don't trigger shortcuts while typing
+
+                // Vim navigation for visualization grid (j/k/h/l)
+                const cards = Array.from(document.querySelectorAll('.viz-card'));
+                const focusedCard = document.querySelector('.viz-card:focus');
+                let currentIndex = focusedCard ? cards.indexOf(focusedCard) : -1;
+
+                if (event.key === 'j' || event.key === 'k' || event.key === 'h' || event.key === 'l') {
+                    event.preventDefault();
+
+                    if (cards.length === 0) return;
+
+                    // If no card is focused, focus the first one
+                    if (currentIndex === -1) {
+                        cards[0].focus();
+                        return;
+                    }
+
+                    // Get grid columns from computed style
+                    const gridContainer = document.getElementById('visualizations-grid');
+                    const computedStyle = window.getComputedStyle(gridContainer);
+                    const columns = computedStyle.gridTemplateColumns.split(' ').length;
+
+                    let newIndex = currentIndex;
+
+                    if (event.key === 'j') { // Down
+                        newIndex = Math.min(currentIndex + columns, cards.length - 1);
+                    } else if (event.key === 'k') { // Up
+                        newIndex = Math.max(currentIndex - columns, 0);
+                    } else if (event.key === 'h') { // Left
+                        newIndex = Math.max(currentIndex - 1, 0);
+                    } else if (event.key === 'l') { // Right
+                        newIndex = Math.min(currentIndex + 1, cards.length - 1);
+                    }
+
+                    if (newIndex !== currentIndex && cards[newIndex]) {
+                        cards[newIndex].focus();
+                        cards[newIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    return;
+                }
+
+                // Enter: Open focused card
+                if (event.key === 'Enter' && focusedCard) {
+                    event.preventDefault();
+                    focusedCard.click();
+                    return;
+                }
+
+                // Cmd+K: Open workspace switcher
+                const modifierKey = event.metaKey || event.ctrlKey;
+                if (modifierKey && event.key === 'k') {
+                    event.preventDefault();
+                    openWorkspaceModal();
+                    return;
+                }
 
                 // Escape: Close embedded chart and return to clean state
                 if (event.key === 'Escape') {
@@ -1060,8 +1407,6 @@
                     }
                     return;
                 }
-
-                const modifierKey = event.metaKey || event.ctrlKey;
 
                 if (modifierKey) {
                     // Cmd/Ctrl + /: Go home
@@ -1081,10 +1426,18 @@
                         cycleWorkspace('down');
                     }
                 }
+            }, { capture: true });
+
+            // Close modal when clicking outside
+            document.getElementById('workspace-modal-overlay').addEventListener('click', (event) => {
+                if (event.target.id === 'workspace-modal-overlay') {
+                    closeWorkspaceModal();
+                }
             });
 
             console.log('🔥 KEYBOARD SHORTCUTS SETUP COMPLETE');
-            console.log('   - Escape: Close embedded chart');
+            console.log('   - Cmd+K: Open workspace switcher');
+            console.log('   - Escape: Close embedded chart or modal');
             console.log('   - Cmd/Ctrl + /: Return to home');
             console.log('   - Cmd/Ctrl + Option + Up/Down: Cycle workspaces');
         }
@@ -1402,5 +1755,27 @@
     </script>
         </div> <!-- End main-content -->
     </div> <!-- End main-layout -->
+
+    <!-- Workspace Switcher Modal -->
+    <div id="workspace-modal-overlay" class="workspace-modal-overlay">
+        <div class="workspace-modal">
+            <div class="workspace-modal-header">
+                <h3>Switch Workspace</h3>
+                <span class="workspace-modal-hint">⌘ + K</span>
+            </div>
+            <!-- Hidden search input to disable Vimium - must be visible for Vimium to detect it -->
+            <input
+                type="text"
+                id="workspace-modal-input"
+                placeholder="Type to filter workspaces..."
+                style="width: 100%; padding: 10px; background: #2a2a2a; border: 1px solid #333; border-radius: 4px; color: #e0e0e0; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px; margin-bottom: 10px; outline: none;"
+            />
+            <div id="workspace-modal-list" class="workspace-modal-list"></div>
+            <div class="workspace-modal-footer">
+                <kbd>↑↓</kbd> to navigate • <kbd>Enter</kbd> to select • <kbd>Esc</kbd> to close
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
