@@ -26,12 +26,6 @@ data/**/*.sqlite3
 # Build output
 dist/
 build/
-electron-app/dist/
-electron-app/build/
-
-# Electron
-electron-app/.vite/
-electron-app/out/
 
 # macOS
 .DS_Store

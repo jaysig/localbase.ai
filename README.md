@@ -28,29 +28,14 @@ git merge upstream/main
 npm install  # Update dependencies if package.json changed
 ```
 
-### 2. Start the servers
+### 2. Start the server
 
-**Browser Mode (Web Dashboard):**
 ```bash
 npm start           # Web dashboard (http://localhost:3000)
 npm run mcp         # MCP server (for Claude Code AI integration)
 ```
 
-**Desktop App Mode (Electron):**
-
-**IMPORTANT:** In development, you must run the Express server separately:
-
-```bash
-# Terminal 1: Start Express server
-npm start
-
-# Terminal 2: Start Electron app
-cd electron-app
-npm install
-npm run electron:dev
-```
-
-**Why?** Electron uses Node v18 (MODULE_VERSION 121) while better-sqlite3 is compiled for your system's Node version. Running the server separately allows better-sqlite3 to use the system Node version, avoiding native module version mismatches.
+Access the dashboard at http://localhost:3000
 
 ### 3. Build your first connector
 
@@ -58,13 +43,11 @@ See `connectors/example/` for a complete guide on building data connectors.
 
 ## What You Get
 
-### 🖥️ Desktop App (Electron)
-- **Home** - Beautiful starfield welcome screen
+### 🌐 Web Dashboard
 - **Visualizations** - Interactive charts and dashboards
-- **Live Workspace** - Split view: terminal + live viz preview
-- **Tools** - Extensible plugin system for custom business tools
-- **Terminal** - Integrated terminal for running scripts
-- **Settings** - Configure data sources and project paths
+- **Auto-refresh** - New visualizations appear automatically
+- **Vim navigation** - Keyboard shortcuts (j/k/h/l)
+- **Search & filter** - Find visualizations quickly
 
 ### 🤖 AI Integration (Claude Code + MCP)
 Ask questions in natural language:
@@ -88,42 +71,29 @@ Build connectors for any data source:
 ## Architecture
 
 ```
-localbase-template/
-├── electron-app/           # Desktop application
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Home.jsx            # Welcome screen
-│   │   │   ├── LiveWorkspace.jsx   # Terminal + viz preview
-│   │   │   ├── Tools.jsx           # Plugin container
-│   │   │   ├── Overview.jsx        # Settings
-│   │   │   └── VisualizationViewer.jsx
-│   │   ├── hooks/
-│   │   │   └── useVimiumShortcuts.js  # Vim-style navigation
-│   │   └── App.jsx
-│   ├── electron/
-│   │   ├── main.js        # Electron main process
-│   │   └── preload.js     # IPC bridge
-│   ├── build.sh           # Production build
-│   └── install.sh         # Install to /Applications
-│
+localbase.ai/
 ├── tools/                  # Framework libraries
-│   ├── viz/               # Visualization factory
+│   ├── viz/               # Visualization generators
 │   ├── mcp/               # Claude Code integration
 │   ├── server/            # Express.js backend
+│   ├── connectors/        # BaseConnector class
 │   └── ocr/               # OCR text extraction
 │
-├── connectors/            # Data connectors
-│   ├── base.js           # BaseConnector framework
-│   ├── example/          # Example connector template
-│   └── sync.md           # Connector documentation
-│
-├── app/                   # Web dashboard
+├── web-app/               # Web dashboard
 │   ├── viz/              # Generated visualizations
-│   ├── assets/           # Static resources
+│   ├── assets/           # Chart libraries, styles
 │   └── index.html        # Main dashboard
 │
+├── connectors/            # Data connectors (your code)
+│   ├── base.js           # BaseConnector framework
+│   └── example/          # Example connector template
+│
 ├── data/                  # Local SQLite databases
-│   └── localbase_schema.json  # Schema documentation
+│   └── .gitkeep          # Databases not committed
+│
+├── scripts/               # Utility scripts
+│   ├── sync-framework.sh # Sync framework to instances
+│   └── bootstrap-instance.sh
 │
 └── env.local             # Environment variables (create this)
 ```
@@ -159,109 +129,12 @@ HUBSPOT_API_KEY=your_api_key
 GOOGLE_ADS_DEVELOPER_TOKEN=your_token
 ```
 
-### 3. Build custom tools (plugins)
+### 3. Customize the dashboard
 
-Tools are React components that appear in the Tools tab:
-
-```javascript
-// electron-app/src/components/tools/SalesAnalyzer.jsx
-export default function SalesAnalyzer() {
-  // Your custom business logic
-  return <div>Custom sales analysis tool</div>
-}
-```
-
-Register in `electron-app/src/components/Tools.jsx`:
-
-```javascript
-const tools = [
-  {
-    id: 'salesanalyzer',
-    name: 'Sales Analyzer',
-    description: 'Analyze sales performance',
-    icon: TrendingUp,
-    component: SalesAnalyzer
-  }
-]
-```
-
-### 4. Update branding
-
-Edit `electron-app/package.json`:
-
-```json
-{
-  "name": "my-business-analytics",
-  "productName": "MyBusiness Analytics",
-  "description": "Analytics dashboard for MyBusiness Inc"
-}
-```
-
-Edit `electron-app/src/components/Home.jsx`:
-- Change app name
-- Update welcome message
-- Customize colors
-
-## Desktop App Development
-
-```bash
-cd electron-app
-npm install
-npm run electron:dev    # Start dev mode (Vite + Electron)
-```
-
-### Production Build
-
-```bash
-cd electron-app
-./build.sh              # Build production app
-./install.sh            # Install to /Applications
-```
-
-Or combined:
-
-```bash
-npm run prod:install    # Build + install in one step
-```
-
-### Syncing Electron App to Workspaces
-
-The LocalBase framework maintains the canonical `electron-app/` code. To push updates to your workspaces:
-
-```bash
-# From framework directory (localbase.ai)
-./sync-electron.sh
-```
-
-This will:
-1. Auto-detect all LocalBase workspaces in `~/Work/`
-2. Copy `electron-app/` to each workspace
-3. Exclude build artifacts (node_modules, dist, etc)
-
-After syncing, rebuild the app in each workspace:
-
-```bash
-# In each workspace
-cd electron-app
-npm install              # If package.json changed
-npm run prod:install    # Build + install
-```
-
-**Development Workflow:**
-1. Make changes in framework's `electron-app/`
-2. Run `./sync-electron.sh` to push to workspaces
-3. Test in each workspace
-4. Commit changes to framework repo
-
-**What Gets Synced:**
-- ✅ Source code (src/, electron/)
-- ✅ Config files (package.json, vite.config.js)
-- ✅ Build scripts (build.sh, install.sh)
-- ❌ node_modules (excluded)
-- ❌ dist/ (excluded)
-- ❌ build outputs (excluded)
-
-**Note:** Workspaces should **not** commit their `electron-app/` directories since they're generated from the framework.
+Edit `web-app/index.html`:
+- Update page title and branding
+- Customize colors and styling
+- Add your business logo
 
 ## Features
 
@@ -272,13 +145,6 @@ npm run prod:install    # Build + install
 - `f` - Link hints (click with keyboard)
 - `F` - Link hints (open in new tab)
 - `d/u` - Scroll half page
-
-### Live Workspace
-Split terminal + visualization preview:
-- Run scripts in terminal
-- Visualizations appear automatically
-- Auto-refresh every 2 seconds
-- Toggle horizontal/vertical split
 
 ### Visualization Auto-Detection
 Generate charts and they automatically appear in the dashboard:
@@ -293,10 +159,7 @@ await generateMultilineChart({
 })
 ```
 
-Chart appears in:
-1. Web dashboard
-2. Live Workspace preview
-3. Visualizations tab
+Charts automatically appear in the web dashboard and refresh every 30 seconds.
 
 ## Real-World Use Cases
 
@@ -359,14 +222,14 @@ Store databases in `data/[source]/` directories.
 **Core:**
 - Node.js 18+
 - SQLite 3
-- Electron 29+
 
 **Key packages:**
 - `better-sqlite3` - Database operations
 - `express` - Web server
 - `dotenv` - Environment config
-- `react` - UI framework
 - `apexcharts` - Charting library
+- `d3` - Custom visualizations
+- `chart.js` - Specialty charts
 
 ## Project Structure Best Practices
 
@@ -382,15 +245,14 @@ Store databases in `data/[source]/` directories.
 - **Connector Guide**: See `connectors/example/README.md`
 - **BaseConnector API**: See `connectors/base.js`
 - **Chart Templates**: See `tools/templates/`
-- **Electron App**: See `electron-app/README.md`
 
 ## Next Steps
 
 1. **Create connectors** for your data sources
-2. **Build custom tools** for your business workflows
-3. **Generate visualizations** for key metrics
-4. **Deploy** - Build desktop app and install locally
-5. **Iterate** - Add more connectors and tools as needed
+2. **Generate visualizations** for key metrics
+3. **Customize** the dashboard for your business
+4. **Integrate with Claude Code** for AI-powered analytics
+5. **Iterate** - Add more connectors and visualizations as needed
 
 ---
 
