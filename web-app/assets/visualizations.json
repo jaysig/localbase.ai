@@ -1,20 +1,32 @@
 {
   "visualizations": [
     {
-      "id": "framework-stats-1762893680140",
-      "filename": "framework-stats.html",
-      "title": "LocalBase.ai Framework Stats",
+      "id": "example-chart",
+      "filename": "EXAMPLE-chart.html",
+      "title": "Example Chart",
+      "description": "A simple example visualization demonstrating the LocalBase framework",
       "type": "chart",
+      "category": "example",
       "library": "apexcharts",
-      "url": "web-app/viz/framework-stats.html",
+      "url": "/viz/EXAMPLE-chart.html",
+      "workspace": "my-workspace",
       "size": "medium",
-      "date": "2025-11-11T20:41:20.140Z",
-      "createdAt": "2025-11-11T20:41:20.141Z",
-      "workspace": "framework",
-      "views": 0,
-      "lastViewed": null
+      "created": "2025-11-12T19:30:00.000Z",
+      "updated": "2025-11-12T19:30:00.000Z"
+    },
+    {
+      "id": "example-framework-stats",
+      "filename": "EXAMPLE-framework-stats.html",
+      "title": "Framework Repository Stats",
+      "description": "Repository size breakdown showing Git repo size vs working directory with node_modules",
+      "type": "dashboard",
+      "category": "example",
+      "library": "apexcharts",
+      "url": "/viz/EXAMPLE-framework-stats.html",
+      "workspace": "my-workspace",
+      "size": "large",
+      "created": "2025-11-12T19:30:00.000Z",
+      "updated": "2025-11-12T19:30:00.000Z"
     }
-  ],
-  "lastUpdated": "2025-10-20T00:00:00.000Z",
-  "totalVisualizations": 1
+  ]
 }

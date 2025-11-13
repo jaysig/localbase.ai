@@ -13,7 +13,13 @@ import cors from 'cors';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultProjectRoot = join(__dirname, '..', '..');
-let currentWorkspace = defaultProjectRoot; // Track current workspace dynamically
+const myWorkspacePath = join(defaultProjectRoot, 'my-workspace');
+
+// Default to my-workspace if it exists, otherwise use project root
+let currentWorkspace = existsSync(join(myWorkspacePath, 'web-app', 'assets', 'visualizations.json'))
+  ? myWorkspacePath
+  : defaultProjectRoot;
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -234,6 +240,7 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 LocalBase Insights Server running on http://localhost:${PORT}`);
   console.log(`📊 Dashboard: http://localhost:${PORT}`);
+  console.log(`📁 Workspace: ${currentWorkspace}`);
   console.log(`🔍 Health check: http://localhost:${PORT}/health`);
 });
 
