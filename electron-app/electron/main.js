@@ -719,11 +719,9 @@ ipcMain.handle('api:getVisualizations', async () => {
     const registry = JSON.parse(data)
 
     // Detect workspace from path
-    const workspace = currentProjectRoot.includes('/goskills') ? 'goskills'
-      : currentProjectRoot.includes('/renu') ? 'renu'
-      : currentProjectRoot.includes('/my-workspace') ? 'my-workspace'
+    const workspace = currentProjectRoot.includes('/my-workspace') ? 'my-workspace'
       : currentProjectRoot.includes('/localbase.ai') ? 'framework'
-      : 'unknown'
+      : path.basename(currentProjectRoot)
 
     console.log(`📊 Detected workspace: ${workspace}`)
 

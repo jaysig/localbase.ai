@@ -298,11 +298,12 @@ Chart appears in:
 2. Live Workspace preview
 3. Visualizations tab
 
-## Example Business Instances
+## Real-World Use Cases
 
-This template powers:
-- **Renu Roofing** - Roofing company analytics (QuickBooks, RoofMaxx, Roofr)
-- **GoSkills** - SaaS analytics (HubSpot, Mixpanel, G2)
+LocalBase can power analytics for:
+- Service businesses (QuickBooks, CRM, scheduling tools)
+- SaaS companies (HubSpot, Mixpanel, analytics platforms)
+- E-commerce (Shopify, Stripe, Google Analytics)
 
 ## MCP Tools
 
