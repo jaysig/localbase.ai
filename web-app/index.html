@@ -1191,51 +1191,6 @@
                 overlay.classList.add('active');
                 workspaceModalOpen = true;
 
-                // Focus search input to disable Vimium hotkeys
-                const searchInput = document.getElementById('workspace-modal-input');
-                setTimeout(() => {
-                    searchInput.value = '';
-                    searchInput.focus();
-                }, 0);
-
-                // Add search filtering
-                searchInput.oninput = (e) => {
-                    const filter = e.target.value.toLowerCase();
-                    const items = document.querySelectorAll('.workspace-item');
-                    items.forEach((item, index) => {
-                        const name = workspaceModalItems[index].name.toLowerCase();
-                        if (name.includes(filter)) {
-                            item.style.display = '';
-                        } else {
-                            item.style.display = 'none';
-                        }
-                    });
-                };
-
-                // Add dedicated keydown handler on the input for Tab/Shift+Tab navigation
-                searchInput.onkeydown = (e) => {
-                    if (e.key === 'Tab') {
-                        e.preventDefault();
-                        if (e.shiftKey) {
-                            navigateWorkspaceModal('up');
-                        } else {
-                            navigateWorkspaceModal('down');
-                        }
-                    } else if (e.key === 'ArrowDown') {
-                        e.preventDefault();
-                        navigateWorkspaceModal('down');
-                    } else if (e.key === 'ArrowUp') {
-                        e.preventDefault();
-                        navigateWorkspaceModal('up');
-                    } else if (e.key === 'Enter') {
-                        e.preventDefault();
-                        selectWorkspace();
-                    } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        closeWorkspaceModal();
-                    }
-                };
-
                 console.log('🔥 Workspace modal opened');
             } catch (error) {
                 console.error('Error opening workspace modal:', error);
@@ -1763,13 +1718,6 @@
                 <h3>Switch Workspace</h3>
                 <span class="workspace-modal-hint">⌘ + K</span>
             </div>
-            <!-- Hidden search input to disable Vimium - must be visible for Vimium to detect it -->
-            <input
-                type="text"
-                id="workspace-modal-input"
-                placeholder="Type to filter workspaces..."
-                style="width: 100%; padding: 10px; background: #2a2a2a; border: 1px solid #333; border-radius: 4px; color: #e0e0e0; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px; margin-bottom: 10px; outline: none;"
-            />
             <div id="workspace-modal-list" class="workspace-modal-list"></div>
             <div class="workspace-modal-footer">
                 <kbd>↑↓</kbd> to navigate • <kbd>Enter</kbd> to select • <kbd>Esc</kbd> to close
