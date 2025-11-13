@@ -768,8 +768,20 @@ app.get('/api/workspace/stats', (req, res) => {
 
     // Get code + assets size (excluding node_modules and .git)
     try {
-      const codeSize = execSync(`du -sh --exclude=node_modules --exclude=.git "${currentWorkspace}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-      stats.codeSize = codeSize;
+      // macOS du doesn't support --exclude, so we calculate manually
+      const totalSize = execSync(`du -sk "${currentWorkspace}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+      const gitSize = execSync(`du -sk "${currentWorkspace}/.git" 2>/dev/null | cut -f1 || echo 0`, { encoding: 'utf8' }).trim();
+      const nodeSize = execSync(`du -sk "${currentWorkspace}/node_modules" "${currentWorkspace}/electron-app/node_modules" 2>/dev/null | awk '{sum+=$1} END {print sum}' || echo 0`, { encoding: 'utf8' }).trim();
+
+      const codeSizeKB = parseInt(totalSize) - parseInt(gitSize || 0) - parseInt(nodeSize || 0);
+
+      if (codeSizeKB < 1024) {
+        stats.codeSize = codeSizeKB + 'K';
+      } else if (codeSizeKB < 1024 * 1024) {
+        stats.codeSize = Math.round(codeSizeKB / 1024) + 'M';
+      } else {
+        stats.codeSize = (codeSizeKB / 1024 / 1024).toFixed(1) + 'G';
+      }
     } catch (e) {
       stats.codeSize = 'N/A';
     }
