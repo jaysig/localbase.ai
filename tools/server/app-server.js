@@ -9,9 +9,10 @@ import express from 'express';
 import { join, dirname, basename, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import { VizRegistry } from '../viz/registry.js';
-import { unlinkSync, existsSync } from 'fs';
+import { unlinkSync, existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { BusinessFunnelAPI } from './business-funnel-api.js';
 import cors from 'cors';
+import { execSync } from 'child_process';
 import {
   detectWorkspaces,
   getCurrentWorkspace,
@@ -740,10 +741,6 @@ app.get('/api/workspace', (req, res) => {
  */
 app.get('/api/workspace/stats', (req, res) => {
   try {
-    const { execSync } = require('child_process');
-    const fs = require('fs');
-    const path = require('path');
-
     const workspaceName = currentWorkspace.split('/').pop();
     const stats = {
       workspace: workspaceName,
@@ -752,8 +749,8 @@ app.get('/api/workspace/stats', (req, res) => {
 
     // Get git repo size
     try {
-      const gitDir = path.join(currentWorkspace, '.git');
-      if (fs.existsSync(gitDir)) {
+      const gitDir = join(currentWorkspace, '.git');
+      if (existsSync(gitDir)) {
         const gitSize = execSync(`du -sh "${gitDir}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
         stats.gitRepoSize = gitSize;
       }
@@ -779,12 +776,12 @@ app.get('/api/workspace/stats', (req, res) => {
 
     // Get node_modules size
     try {
-      const nodeModulesDir = path.join(currentWorkspace, 'node_modules');
-      const electronNodeModulesDir = path.join(currentWorkspace, 'electron-app/node_modules');
+      const nodeModulesDir = join(currentWorkspace, 'node_modules');
+      const electronNodeModulesDir = join(currentWorkspace, 'electron-app/node_modules');
       let nodeSize = '0B';
 
-      if (fs.existsSync(nodeModulesDir) || fs.existsSync(electronNodeModulesDir)) {
-        const dirs = [nodeModulesDir, electronNodeModulesDir].filter(d => fs.existsSync(d));
+      if (existsSync(nodeModulesDir) || existsSync(electronNodeModulesDir)) {
+        const dirs = [nodeModulesDir, electronNodeModulesDir].filter(d => existsSync(d));
         nodeSize = execSync(`du -sh ${dirs.map(d => `"${d}"`).join(' ')} 2>/dev/null | awk '{sum+=$1} END {print sum "M"}'`, { encoding: 'utf8' }).trim();
       }
       stats.nodeModulesSize = nodeSize;
@@ -794,9 +791,9 @@ app.get('/api/workspace/stats', (req, res) => {
 
     // Get visualizations count
     try {
-      const vizRegistryPath = path.join(currentWorkspace, 'web-app/assets/visualizations.json');
-      if (fs.existsSync(vizRegistryPath)) {
-        const vizRegistry = JSON.parse(fs.readFileSync(vizRegistryPath, 'utf8'));
+      const vizRegistryPath = join(currentWorkspace, 'web-app/assets/visualizations.json');
+      if (existsSync(vizRegistryPath)) {
+        const vizRegistry = JSON.parse(readFileSync(vizRegistryPath, 'utf8'));
         stats.visualizationCount = vizRegistry.visualizations?.length || 0;
       } else {
         stats.visualizationCount = 0;
@@ -807,11 +804,11 @@ app.get('/api/workspace/stats', (req, res) => {
 
     // Get connectors count
     try {
-      const connectorsDir = path.join(currentWorkspace, 'connectors');
-      if (fs.existsSync(connectorsDir)) {
-        const connectors = fs.readdirSync(connectorsDir).filter(item => {
-          const itemPath = path.join(connectorsDir, item);
-          return fs.statSync(itemPath).isDirectory() && !item.startsWith('.');
+      const connectorsDir = join(currentWorkspace, 'connectors');
+      if (existsSync(connectorsDir)) {
+        const connectors = readdirSync(connectorsDir).filter(item => {
+          const itemPath = join(connectorsDir, item);
+          return statSync(itemPath).isDirectory() && !item.startsWith('.');
         });
         stats.connectorCount = connectors.length;
       } else {
@@ -823,8 +820,8 @@ app.get('/api/workspace/stats', (req, res) => {
 
     // Get database files count and size
     try {
-      const dataDir = path.join(currentWorkspace, 'data');
-      if (fs.existsSync(dataDir)) {
+      const dataDir = join(currentWorkspace, 'data');
+      if (existsSync(dataDir)) {
         const dbCount = execSync(`find "${dataDir}" -name "*.db" 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
         const dbSize = execSync(`du -sh "${dataDir}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
         stats.databaseCount = parseInt(dbCount) || 0;
