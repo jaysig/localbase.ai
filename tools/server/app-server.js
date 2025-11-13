@@ -967,6 +967,84 @@ app.get('/api/workspace/framework-stats', (req, res) => {
 });
 
 /**
+ * GET /api/workspace/node-modules-breakdown
+ * Returns detailed breakdown of node_modules by package size
+ */
+app.get('/api/workspace/node-modules-breakdown', (req, res) => {
+  try {
+    const nodeModulesDir = join(currentWorkspace, 'node_modules');
+
+    if (!existsSync(nodeModulesDir)) {
+      return res.json({
+        success: true,
+        packages: []
+      });
+    }
+
+    // Get size of each top-level package
+    const packages = readdirSync(nodeModulesDir)
+      .filter(item => {
+        const itemPath = join(nodeModulesDir, item);
+        return statSync(itemPath).isDirectory();
+      })
+      .map(packageName => {
+        const packagePath = join(nodeModulesDir, packageName);
+        try {
+          const sizeKB = execSync(`du -sk "${packagePath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+          const sizeMB = parseInt(sizeKB) / 1024;
+
+          // Try to determine category from package.json
+          let category = 'other';
+          try {
+            const pkgJsonPath = join(packagePath, 'package.json');
+            if (existsSync(pkgJsonPath)) {
+              const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf8'));
+              const keywords = pkgJson.keywords || [];
+              const description = (pkgJson.description || '').toLowerCase();
+
+              if (packageName.includes('electron') || keywords.includes('electron')) {
+                category = 'electron';
+              } else if (packageName.includes('webpack') || packageName.includes('babel') || keywords.includes('build')) {
+                category = 'build';
+              } else if (packageName.includes('sqlite') || keywords.includes('database')) {
+                category = 'database';
+              } else if (packageName.includes('react') || packageName.includes('vue') || keywords.includes('ui')) {
+                category = 'ui';
+              } else if (description.includes('test') || keywords.includes('test')) {
+                category = 'testing';
+              }
+            }
+          } catch (e) {}
+
+          return {
+            name: packageName,
+            sizeMB: Math.round(sizeMB * 100) / 100,
+            sizeKB: parseInt(sizeKB),
+            category
+          };
+        } catch (e) {
+          return null;
+        }
+      })
+      .filter(p => p !== null)
+      .sort((a, b) => b.sizeKB - a.sizeKB);
+
+    res.json({
+      success: true,
+      packages: packages.slice(0, 50), // Top 50 packages
+      total: packages.reduce((sum, p) => sum + p.sizeMB, 0),
+      count: packages.length
+    });
+  } catch (error) {
+    console.error('Error analyzing node_modules:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /health
  * Health check endpoint
  */

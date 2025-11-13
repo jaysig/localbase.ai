@@ -47,82 +47,149 @@
             color: #888;
         }
 
-        /* Info Grid */
-        .info-grid {
+        /* Hero Section - Side by Side Comparison */
+        .hero-comparison {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 40px;
+            gap: 30px;
+            margin-bottom: 50px;
         }
 
-        .info-card {
+        .comparison-card {
             background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 20px;
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 16px;
+            padding: 32px;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
         }
 
-        .info-card h3 {
-            font-size: 14px;
+        .comparison-card.framework {
+            border-color: rgba(0, 255, 157, 0.3);
+        }
+
+        .comparison-card.unhooked {
+            border-color: rgba(255, 157, 0, 0.3);
+        }
+
+        .comparison-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #00d9ff, #00ff9d);
+        }
+
+        .comparison-card.framework::before {
+            background: linear-gradient(90deg, #00ff9d, #00d9ff);
+        }
+
+        .comparison-card.unhooked::before {
+            background: linear-gradient(90deg, #ff9d00, #ff5722);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .card-icon {
+            font-size: 2.5em;
+            margin-right: 16px;
+        }
+
+        .card-title {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .framework .card-title {
+            background: linear-gradient(135deg, #00ff9d, #00d9ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .unhooked .card-title {
+            background: linear-gradient(135deg, #ff9d00, #ff5722);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .card-subtitle {
             color: #888;
-            margin-bottom: 16px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            font-size: 0.95em;
+            margin-bottom: 24px;
+            line-height: 1.5;
         }
 
-        .info-list {
+        .size-display {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 24px;
+        }
+
+        .size-number {
+            font-size: 4em;
+            font-weight: bold;
+            color: #00d9ff;
+            margin-right: 12px;
+        }
+
+        .framework .size-number {
+            color: #00ff9d;
+        }
+
+        .unhooked .size-number {
+            color: #ff9d00;
+        }
+
+        .size-unit {
+            font-size: 1.5em;
+            color: #666;
+        }
+
+        .breakdown-list {
             list-style: none;
             padding: 0;
         }
 
-        .info-item {
+        .breakdown-item {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 14px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .info-item:last-child {
+        .breakdown-item:last-child {
             border-bottom: none;
         }
 
-        .info-label {
+        .breakdown-label {
             color: #aaa;
+            display: flex;
+            align-items: center;
         }
 
-        .info-value {
-            color: #e0e0e0;
-            font-family: 'Monaco', 'Menlo', monospace;
+        .breakdown-label::before {
+            content: '📁';
+            margin-right: 8px;
         }
 
-        /* File Tree */
-        .file-tree {
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 13px;
-            line-height: 1.6;
-            color: #aaa;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 16px;
-            border-radius: 6px;
-            overflow-x: auto;
-        }
-
-        .tree-line {
-            white-space: pre;
-        }
-
-        .tree-dir {
+        .breakdown-value {
+            font-weight: bold;
             color: #00d9ff;
         }
 
-        .tree-file {
-            color: #888;
+        .framework .breakdown-value {
+            color: #00ff9d;
         }
 
-        .tree-count {
-            color: #666;
-            font-size: 12px;
+        .unhooked .breakdown-value {
+            color: #ff9d00;
         }
 
         /* Stats Grid */
@@ -269,64 +336,72 @@
         </div>
 
         <div id="stats-content" style="display: none;">
-            <!-- Framework Structure -->
-            <div class="chart-container" style="margin-bottom: 30px;">
-                <div class="chart-title">Framework Structure</div>
-                <div class="file-tree" id="file-tree">
-                    <!-- File tree will be generated here -->
-                </div>
-            </div>
-
-            <!-- Info Grid -->
-            <div class="info-grid">
-                <div class="info-card">
-                    <h3>Workspace Storage</h3>
-                    <ul class="info-list">
-                        <li class="info-item">
-                            <span class="info-label">Total Size</span>
-                            <span class="info-value" id="framework-total-size">0 MB</span>
+            <!-- Hero Comparison: Framework vs Unhooked -->
+            <div class="hero-comparison">
+                <div class="comparison-card framework">
+                    <div class="card-header">
+                        <div class="card-icon">🔗</div>
+                        <div>
+                            <div class="card-title">Framework Connected</div>
+                        </div>
+                    </div>
+                    <div class="card-subtitle">
+                        Your workspace synced with the LocalBase framework. Full-featured IDE, live updates, and ecosystem tools.
+                    </div>
+                    <div class="size-display">
+                        <div class="size-number" id="framework-total-size">0</div>
+                        <div class="size-unit">MB</div>
+                    </div>
+                    <ul class="breakdown-list">
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Core Framework</span>
+                            <span class="breakdown-value" id="framework-core-size">0 MB</span>
                         </li>
-                        <li class="info-item">
-                            <span class="info-label">Core Framework</span>
-                            <span class="info-value" id="framework-core-size">0 MB</span>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Instance Code</span>
+                            <span class="breakdown-value" id="framework-instance-code">0 MB</span>
                         </li>
-                        <li class="info-item">
-                            <span class="info-label">Your Code</span>
-                            <span class="info-value" id="framework-instance-code">0 MB</span>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Your Data</span>
+                            <span class="breakdown-value" id="framework-data-size">0 MB</span>
                         </li>
-                        <li class="info-item">
-                            <span class="info-label">Databases</span>
-                            <span class="info-value" id="framework-data-size">0 MB</span>
-                        </li>
-                        <li class="info-item">
-                            <span class="info-label">Dependencies</span>
-                            <span class="info-value" id="framework-deps-size">0 MB</span>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Dependencies</span>
+                            <span class="breakdown-value" id="framework-deps-size">0 MB</span>
                         </li>
                     </ul>
                 </div>
 
-                <div class="info-card">
-                    <h3>Portable Data (Unhooked)</h3>
-                    <ul class="info-list">
-                        <li class="info-item">
-                            <span class="info-label">Total Portable</span>
-                            <span class="info-value" id="unhooked-total-size">0 MB</span>
+                <div class="comparison-card unhooked">
+                    <div class="card-header">
+                        <div class="card-icon">📦</div>
+                        <div>
+                            <div class="card-title">Unhooked Mode</div>
+                        </div>
+                    </div>
+                    <div class="card-subtitle">
+                        Your data if you disconnect from the framework. Everything you need: databases, connectors, and visualizations.
+                    </div>
+                    <div class="size-display">
+                        <div class="size-number" id="unhooked-total-size">0</div>
+                        <div class="size-unit">MB</div>
+                    </div>
+                    <ul class="breakdown-list">
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Databases</span>
+                            <span class="breakdown-value" id="unhooked-db-size">0 MB</span>
                         </li>
-                        <li class="info-item">
-                            <span class="info-label">Databases</span>
-                            <span class="info-value" id="unhooked-db-size">0 MB</span>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Connectors</span>
+                            <span class="breakdown-value" id="unhooked-connector-size">0 MB</span>
                         </li>
-                        <li class="info-item">
-                            <span class="info-label">Connectors</span>
-                            <span class="info-value" id="unhooked-connector-size">0 MB</span>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Visualizations</span>
+                            <span class="breakdown-value" id="unhooked-viz-size">0 MB</span>
                         </li>
-                        <li class="info-item">
-                            <span class="info-label">Visualizations</span>
-                            <span class="info-value" id="unhooked-viz-size">0 MB</span>
-                        </li>
-                        <li class="info-item">
-                            <span class="info-label">Environment</span>
-                            <span class="info-value" id="unhooked-env-size">0 KB</span>
+                        <li class="breakdown-item">
+                            <span class="breakdown-label">Environment</span>
+                            <span class="breakdown-value" id="unhooked-env-size">0 KB</span>
                         </li>
                     </ul>
                 </div>
@@ -373,6 +448,11 @@
             <div class="chart-container full-width">
                 <div class="chart-title">Core Framework vs Instance Additions</div>
                 <div id="comparisonChart"></div>
+            </div>
+
+            <div class="chart-container full-width">
+                <div class="chart-title">node_modules Breakdown (Top 20 Packages)</div>
+                <div id="nodeModulesChart"></div>
             </div>
 
             <div class="important-note">
@@ -469,13 +549,13 @@
                 document.getElementById('db-size').textContent = stats.databaseSize || '0B';
                 document.getElementById('last-sync').textContent = instanceStats.lastSync || '—';
 
-                // Render file tree
-                renderFileTree(coreStats.files, instanceStats.files);
-
                 // Charts
                 renderFrameworkFilesChart(coreStats.files, instanceStats.files);
                 renderStorageChart(coreSizeMB, instanceCodeSize, dbSizeMB, nodeModulesMB);
                 renderComparisonChart(coreStats.files, instanceStats.files - coreStats.files);
+
+                // Load and render node_modules breakdown
+                loadNodeModulesBreakdown();
 
                 // Show content
                 document.getElementById('loading').style.display = 'none';
@@ -485,33 +565,6 @@
                 console.error('Error loading workspace stats:', error);
                 document.getElementById('loading').textContent = 'Error loading workspace stats: ' + error.message;
             }
-        }
-
-        function renderFileTree(coreFiles, instanceFiles) {
-            const tree = document.getElementById('file-tree');
-            const addedFiles = instanceFiles - coreFiles;
-
-            tree.innerHTML = `<div class="tree-line"><span class="tree-dir">localbase.ai/</span></div>
-<div class="tree-line">├── <span class="tree-dir">tools/</span>           <span class="tree-count"># Framework utilities</span></div>
-<div class="tree-line">│   ├── <span class="tree-dir">connectors/</span>  <span class="tree-count"># BaseConnector class</span></div>
-<div class="tree-line">│   ├── <span class="tree-dir">mcp/</span>          <span class="tree-count"># MCP server</span></div>
-<div class="tree-line">│   ├── <span class="tree-dir">server/</span>       <span class="tree-count"># Express web server</span></div>
-<div class="tree-line">│   ├── <span class="tree-dir">viz/</span>          <span class="tree-count"># Visualization generators</span></div>
-<div class="tree-line">│   └── <span class="tree-dir">ocr/</span>          <span class="tree-count"># OCR utilities</span></div>
-<div class="tree-line">├── <span class="tree-dir">web-app/</span>         <span class="tree-count"># Dashboard UI</span></div>
-<div class="tree-line">│   ├── <span class="tree-file">index.html</span>   <span class="tree-count"># Main dashboard</span></div>
-<div class="tree-line">│   ├── <span class="tree-dir">assets/</span>       <span class="tree-count"># Chart libraries, styles</span></div>
-<div class="tree-line">│   └── <span class="tree-dir">viz/</span>          <span class="tree-count"># Visualizations (${instanceFiles - coreFiles > 0 ? addedFiles + ' custom' : 'none yet'})</span></div>
-<div class="tree-line">├── <span class="tree-dir">electron-app/</span>    <span class="tree-count"># Desktop app</span></div>
-<div class="tree-line">│   ├── <span class="tree-file">package.json</span></div>
-<div class="tree-line">│   ├── <span class="tree-dir">electron/</span>     <span class="tree-count"># Main process</span></div>
-<div class="tree-line">│   └── <span class="tree-dir">src/</span>          <span class="tree-count"># React components</span></div>
-<div class="tree-line">├── <span class="tree-dir">connectors/</span>      <span class="tree-count"># Your data connectors (instance-specific)</span></div>
-<div class="tree-line">├── <span class="tree-dir">data/</span>            <span class="tree-count"># SQLite databases (instance-specific)</span></div>
-<div class="tree-line">└── <span class="tree-file">env.local</span>       <span class="tree-count"># API keys & credentials (not in git)</span></div>
-<div class="tree-line" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
-<span class="tree-count">Core: ${coreFiles.toLocaleString()} files • Instance: ${instanceFiles.toLocaleString()} files (+${addedFiles.toLocaleString()})</span>
-</div>`;
         }
 
         function renderFrameworkFilesChart(coreFiles, totalFiles) {
@@ -683,6 +736,97 @@
             };
 
             const chart = new ApexCharts(document.querySelector("#comparisonChart"), options);
+            chart.render();
+        }
+
+        async function loadNodeModulesBreakdown() {
+            try {
+                const response = await fetch('/api/workspace/node-modules-breakdown');
+                const data = await response.json();
+
+                if (!data.success || !data.packages || data.packages.length === 0) {
+                    document.getElementById('nodeModulesChart').innerHTML =
+                        '<p style="text-align: center; color: #888; padding: 40px;">No node_modules data available</p>';
+                    return;
+                }
+
+                renderNodeModulesTreemap(data.packages.slice(0, 20)); // Top 20
+            } catch (error) {
+                console.error('Error loading node_modules breakdown:', error);
+                document.getElementById('nodeModulesChart').innerHTML =
+                    '<p style="text-align: center; color: #888; padding: 40px;">Error loading node_modules data</p>';
+            }
+        }
+
+        function renderNodeModulesTreemap(packages) {
+            // Color mapping by category
+            const categoryColors = {
+                'electron': '#00d9ff',
+                'build': '#ff9d00',
+                'database': '#00ff9d',
+                'ui': '#ff5722',
+                'testing': '#9c27b0',
+                'other': '#666'
+            };
+
+            // Prepare data for treemap
+            const series = [{
+                data: packages.map(pkg => ({
+                    x: pkg.name,
+                    y: pkg.sizeMB,
+                    fillColor: categoryColors[pkg.category] || categoryColors.other
+                }))
+            }];
+
+            const options = {
+                series: series,
+                chart: {
+                    type: 'treemap',
+                    height: 500,
+                    background: 'transparent',
+                    toolbar: {
+                        show: false
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    style: {
+                        fontSize: '12px',
+                        colors: ['#fff']
+                    },
+                    formatter: function(text, op) {
+                        return [text, op.value.toFixed(1) + ' MB'];
+                    }
+                },
+                plotOptions: {
+                    treemap: {
+                        distributed: true,
+                        enableShades: false
+                    }
+                },
+                legend: {
+                    show: true,
+                    position: 'bottom',
+                    labels: {
+                        colors: '#e0e0e0',
+                        useSeriesColors: false
+                    },
+                    markers: {
+                        fillColors: Object.values(categoryColors)
+                    },
+                    customLegendItems: ['Electron', 'Build Tools', 'Database', 'UI', 'Testing', 'Other']
+                },
+                tooltip: {
+                    theme: 'dark',
+                    y: {
+                        formatter: function(val) {
+                            return val.toFixed(2) + ' MB';
+                        }
+                    }
+                }
+            };
+
+            const chart = new ApexCharts(document.querySelector("#nodeModulesChart"), options);
             chart.render();
         }
 
