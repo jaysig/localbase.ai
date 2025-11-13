@@ -212,7 +212,7 @@
                 document.getElementById('workspace-path').textContent = workspacePath;
 
                 // Load visualizations
-                const vizResponse = await fetch('/api/visualizations');
+                const vizResponse = await fetch('/api/viz');
                 const vizData = await vizResponse.json();
                 const visualizations = vizData.visualizations || [];
 
