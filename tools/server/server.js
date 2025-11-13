@@ -101,7 +101,25 @@ app.get('/viz/:chartId', (req, res) => {
   }
 });
 
-// API route for workspace info
+// API route for current workspace info
+app.get('/api/workspace', (req, res) => {
+  try {
+    const workspaceName = currentWorkspace.split('/').pop();
+    res.json({
+      success: true,
+      workspace: workspaceName,
+      path: currentWorkspace
+    });
+  } catch (error) {
+    console.error('Error getting workspace info:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// API route for all workspaces list
 app.get('/api/workspaces', (req, res) => {
   try {
     const allWorkspaces = detectWorkspaces();
