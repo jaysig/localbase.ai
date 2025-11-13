@@ -1333,11 +1333,14 @@
                 if (isTyping) return; // Don't trigger shortcuts while typing
 
                 // Vim navigation for visualization grid (j/k/h/l)
+                // Only capture these keys when no modifier is held (don't block Cmd+L, etc)
+                const hasModifier = event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+
                 const cards = Array.from(document.querySelectorAll('.viz-card'));
                 const focusedCard = document.querySelector('.viz-card:focus');
                 let currentIndex = focusedCard ? cards.indexOf(focusedCard) : -1;
 
-                if (event.key === 'j' || event.key === 'k' || event.key === 'h' || event.key === 'l') {
+                if (!hasModifier && (event.key === 'j' || event.key === 'k' || event.key === 'h' || event.key === 'l')) {
                     event.preventDefault();
 
                     if (cards.length === 0) return;
