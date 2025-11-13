@@ -10,20 +10,6 @@
       "library": "apexcharts",
       "url": "/viz/workspace-stats.html",
       "createdAt": "2025-11-13T00:00:00.000Z"
-    },
-    {
-      "id": "example-chart",
-      "filename": "EXAMPLE-chart.html",
-      "title": "Example Chart",
-      "description": "A simple example visualization demonstrating the LocalBase framework",
-      "type": "chart",
-      "category": "example",
-      "library": "apexcharts",
-      "url": "/viz/EXAMPLE-chart.html",
-      "workspace": "my-workspace",
-      "size": "medium",
-      "created": "2025-11-12T19:30:00.000Z",
-      "updated": "2025-11-12T19:30:00.000Z"
     }
   ]
 }

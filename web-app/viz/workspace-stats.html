@@ -194,18 +194,33 @@
                 </div>
             </div>
 
-            <h2 style="color: #00ff9d; margin: 40px 0 20px 0; font-size: 1.5em;">Framework Stats (Synced)</h2>
+            <h2 style="color: #00ff9d; margin: 40px 0 20px 0; font-size: 1.5em;">Core Framework (Source)</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-label">Framework Files</div>
-                    <div class="stat-value" id="framework-files">0</div>
-                    <div class="stat-sub">tools/ + web-app/ + electron-app/</div>
+                    <div class="stat-label">Core Files</div>
+                    <div class="stat-value" id="core-files">0</div>
+                    <div class="stat-sub">localbase.ai source</div>
                 </div>
 
                 <div class="stat-card">
-                    <div class="stat-label">Framework Size</div>
-                    <div class="stat-value" id="framework-size">0 MB</div>
-                    <div class="stat-sub">Synced from localbase.ai</div>
+                    <div class="stat-label">Core Size</div>
+                    <div class="stat-value" id="core-size">0 MB</div>
+                    <div class="stat-sub">Framework only</div>
+                </div>
+            </div>
+
+            <h2 style="color: #ff9d00; margin: 40px 0 20px 0; font-size: 1.5em;">Instance Framework (Synced + Additions)</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Files</div>
+                    <div class="stat-value" id="instance-files">0</div>
+                    <div class="stat-sub">Framework + instance additions</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-label">Total Size</div>
+                    <div class="stat-value" id="instance-size">0 MB</div>
+                    <div class="stat-sub">Including customizations</div>
                 </div>
 
                 <div class="stat-card">
@@ -276,10 +291,16 @@
                 const frameworkData = await frameworkResponse.json();
 
                 if (frameworkData.success) {
-                    const fwStats = frameworkData.frameworkStats;
-                    document.getElementById('framework-files').textContent = fwStats.files || 0;
-                    document.getElementById('framework-size').textContent = fwStats.size || 'N/A';
-                    document.getElementById('last-sync').textContent = fwStats.lastSync || '—';
+                    // Core framework stats (from localbase.ai)
+                    const coreStats = frameworkData.coreFramework;
+                    document.getElementById('core-files').textContent = coreStats.files || 0;
+                    document.getElementById('core-size').textContent = coreStats.size || 'N/A';
+
+                    // Instance framework stats (synced + additions)
+                    const instanceStats = frameworkData.instanceFramework;
+                    document.getElementById('instance-files').textContent = instanceStats.files || 0;
+                    document.getElementById('instance-size').textContent = instanceStats.size || 'N/A';
+                    document.getElementById('last-sync').textContent = instanceStats.lastSync || '—';
                 }
 
                 // Load visualizations for charts

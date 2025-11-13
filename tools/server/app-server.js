@@ -867,50 +867,66 @@ app.get('/api/workspace/stats', (req, res) => {
 app.get('/api/workspace/framework-stats', (req, res) => {
   try {
     const frameworkDirs = ['tools', 'web-app', 'electron-app', 'scripts'];
-    let totalFiles = 0;
-    let totalSize = 0;
-    let lastModified = null;
+    const coreFrameworkPath = '/Users/ryanriggin/Work/localbase.ai';
 
     // Check if current workspace is a subdirectory (like my-workspace)
-    // If so, use parent directory for framework stats
-    let frameworkRoot = currentWorkspace;
+    // If so, use parent directory for instance framework stats
+    let instanceFrameworkRoot = currentWorkspace;
     const workspaceName = basename(currentWorkspace);
     if (workspaceName === 'my-workspace' || workspaceName.endsWith('-workspace')) {
-      frameworkRoot = dirname(currentWorkspace);
+      instanceFrameworkRoot = dirname(currentWorkspace);
     }
 
+    // Calculate instance framework stats (current workspace)
+    let instanceFiles = 0;
+    let instanceSize = 0;
+    let lastModified = null;
+
     frameworkDirs.forEach(dir => {
-      const dirPath = join(frameworkRoot, dir);
+      const dirPath = join(instanceFrameworkRoot, dir);
       if (existsSync(dirPath)) {
         try {
-          // Count files
           const fileCount = execSync(`find "${dirPath}" -type f 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
-          totalFiles += parseInt(fileCount) || 0;
+          instanceFiles += parseInt(fileCount) || 0;
 
-          // Get size
           const dirSize = execSync(`du -sk "${dirPath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-          totalSize += parseInt(dirSize) || 0;
+          instanceSize += parseInt(dirSize) || 0;
 
-          // Get last modified time
           const modTime = statSync(dirPath).mtime;
           if (!lastModified || modTime > lastModified) {
             lastModified = modTime;
           }
-        } catch (e) {
-          // Skip if directory doesn't exist
-        }
+        } catch (e) {}
       }
     });
 
-    // Format size
-    let formattedSize;
-    if (totalSize < 1024) {
-      formattedSize = totalSize + 'K';
-    } else if (totalSize < 1024 * 1024) {
-      formattedSize = Math.round(totalSize / 1024) + 'M';
-    } else {
-      formattedSize = (totalSize / 1024 / 1024).toFixed(1) + 'G';
-    }
+    // Calculate core framework stats (source repo)
+    let coreFiles = 0;
+    let coreSize = 0;
+
+    frameworkDirs.forEach(dir => {
+      const dirPath = join(coreFrameworkPath, dir);
+      if (existsSync(dirPath)) {
+        try {
+          const fileCount = execSync(`find "${dirPath}" -type f 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
+          coreFiles += parseInt(fileCount) || 0;
+
+          const dirSize = execSync(`du -sk "${dirPath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
+          coreSize += parseInt(dirSize) || 0;
+        } catch (e) {}
+      }
+    });
+
+    // Format sizes
+    const formatSize = (sizeKB) => {
+      if (sizeKB < 1024) {
+        return sizeKB + 'K';
+      } else if (sizeKB < 1024 * 1024) {
+        return Math.round(sizeKB / 1024) + 'M';
+      } else {
+        return (sizeKB / 1024 / 1024).toFixed(1) + 'G';
+      }
+    };
 
     // Format last modified
     const now = new Date();
@@ -931,9 +947,13 @@ app.get('/api/workspace/framework-stats', (req, res) => {
 
     res.json({
       success: true,
-      frameworkStats: {
-        files: totalFiles,
-        size: formattedSize,
+      coreFramework: {
+        files: coreFiles,
+        size: formatSize(coreSize)
+      },
+      instanceFramework: {
+        files: instanceFiles,
+        size: formatSize(instanceSize),
         lastSync: lastSyncFormatted
       }
     });
