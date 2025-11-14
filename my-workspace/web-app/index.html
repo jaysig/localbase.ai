@@ -366,7 +366,7 @@
         }
         
         .no-charts {
-            text-align: center;
+            text-align: left;
             padding: 60px;
             color: #666;
             width: 100%;
@@ -1017,23 +1017,25 @@
             if (items.length === 0) {
                 grid.innerHTML = `
                     <div class="no-charts">
-                        <h2 style="color: #e5e5e5; margin-bottom: 20px; font-size: 24px;">Welcome to LocalBase</h2>
-                        <p style="color: #999; margin-bottom: 30px; font-size: 16px;">Get started by creating your first visualization with AI</p>
-                        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 24px; width: 100%; max-width: 100%; margin: 0; text-align: left;">
-                            <div style="margin-bottom: 20px;">
-                                <div style="color: #666; font-size: 12px; margin-bottom: 8px;">Terminal 1: Start MCP server</div>
-                                <code style="display: block; background: #0a0a0a; padding: 12px; border-radius: 4px; color: #00d9ff; font-family: 'Monaco', 'Menlo', monospace; font-size: 14px;">npm run mcp</code>
-                            </div>
-                            <div style="margin-bottom: 20px;">
-                                <div style="color: #666; font-size: 12px; margin-bottom: 8px;">Terminal 2: Launch Claude</div>
-                                <code style="display: block; background: #0a0a0a; padding: 12px; border-radius: 4px; color: #00d9ff; font-family: 'Monaco', 'Menlo', monospace; font-size: 14px;">claude</code>
-                            </div>
-                            <div>
-                                <div style="color: #666; font-size: 12px; margin-bottom: 8px;">Ask Claude to create charts</div>
-                                <code style="display: block; background: #0a0a0a; padding: 12px; border-radius: 4px; color: #999; font-family: 'Monaco', 'Menlo', monospace; font-size: 14px;">"Create a chart of my revenue trends"</code>
-                            </div>
+                        <h2 style="color: #e5e5e5; margin-bottom: 12px; font-size: 20px; font-weight: 600;">Welcome to LocalBase</h2>
+                        <p style="color: #999; margin-bottom: 24px; font-size: 14px;">Get started by creating your first visualization with AI</p>
+
+                        <div style="margin-bottom: 16px;">
+                            <div style="color: #666; font-size: 12px; margin-bottom: 6px;">Start LocalBase (web server + MCP)</div>
+                            <code style="display: block; background: #1a1a1a; padding: 10px 12px; border-radius: 4px; color: #00d9ff; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px;">npm run all</code>
                         </div>
-                        <p style="color: #666; font-size: 14px; margin-top: 30px;">Charts will appear here automatically</p>
+
+                        <div style="margin-bottom: 16px;">
+                            <div style="color: #666; font-size: 12px; margin-bottom: 6px;">In a new terminal, launch Claude</div>
+                            <code style="display: block; background: #1a1a1a; padding: 10px 12px; border-radius: 4px; color: #00d9ff; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px;">claude</code>
+                        </div>
+
+                        <div style="margin-bottom: 16px;">
+                            <div style="color: #666; font-size: 12px; margin-bottom: 6px;">Ask Claude to create charts</div>
+                            <code style="display: block; background: #1a1a1a; padding: 10px 12px; border-radius: 4px; color: #999; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px;">"Create a chart of my revenue trends"</code>
+                        </div>
+
+                        <p style="color: #666; font-size: 12px; margin-top: 24px;">Charts will appear here automatically</p>
                     </div>
                 `;
                 return;
