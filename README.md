@@ -1,19 +1,27 @@
 # LocalBase
 
-**Local AI tools for SMBs**
+**Local-first analytics workspace for your business**
 
 Query your business data (QuickBooks, HubSpot, etc.) with AI. Everything runs locally on your machine.
 
-## 30 Second Start
+## Quick Start
 
 ```bash
 git clone https://github.com/rriggin/localbase.ai.git
 cd localbase.ai
+
+# Create your workspace
+mv my-workspace ../my-workspace
+cd ../my-workspace
+
+# Install and start
 npm install
 npm start
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000 to see your workspace dashboard.
+
+> **Note:** Running from the framework directory shows a setup guide at http://localhost:3000
 
 ## Ask AI About Your Data
 
@@ -50,6 +58,23 @@ Edit `connectors/quickbooks/index.js` to fetch your data.
 
 See `connectors/example/README.md` for details.
 
+## Desktop App (Optional)
+
+Build and run the Electron desktop app for an IDE-like experience with embedded terminal and Claude integration:
+
+```bash
+cd electron-app
+npm install
+npm run electron:dev      # Development mode
+npm run electron:build    # Production build (macOS, Linux)
+```
+
+The desktop app includes:
+- Embedded terminal with full shell access
+- Auto-starting MCP server for Claude integration
+- Live visualization updates (refreshes every 3 seconds)
+- Server health monitoring
+
 ## What's Inside
 
 ```
@@ -57,7 +82,9 @@ localbase.ai/
 ├── tools/           # Framework (MCP server, charts, etc.)
 ├── connectors/      # Your data sources
 ├── data/           # SQLite databases
-└── web-app/        # Dashboard
+├── web-app/        # Dashboard
+├── electron-app/   # Desktop application
+└── my-workspace/   # Template workspace (move to parent dir)
 ```
 
 ## Stack
@@ -66,6 +93,7 @@ localbase.ai/
 - **SQLite** - Local database
 - **MCP** - AI integration
 - **Express** - Web server
+- **Electron** - Desktop app (optional)
 - **ApexCharts** - Visualizations
 
 ## Requirements
