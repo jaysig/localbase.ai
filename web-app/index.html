@@ -1017,7 +1017,22 @@
             });
 
             if (items.length === 0) {
-                grid.innerHTML = '<div class="no-charts">No visualizations match current filter.</div>';
+                grid.innerHTML = `
+                    <div class="no-charts">
+                        <h2>Welcome to LocalBase</h2>
+                        <p>Get started by creating your first visualization with AI:</p>
+                        <pre style="background: #2a2a2a; padding: 16px; border-radius: 8px; margin: 16px 0; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto;">
+<span style="color: #666"># Terminal 1: Start MCP server</span>
+npm run mcp
+
+<span style="color: #666"># Terminal 2: Launch Claude</span>
+claude
+
+<span style="color: #666"># Ask Claude to create charts</span>
+"Create a chart of my revenue trends"</pre>
+                        <p style="color: #888; font-size: 14px;">Charts will appear here automatically</p>
+                    </div>
+                `;
                 return;
             }
 

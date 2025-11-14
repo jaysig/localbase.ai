@@ -10,7 +10,6 @@ import { join, dirname, basename, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import { VizRegistry } from '../viz/registry.js';
 import { unlinkSync, existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { BusinessFunnelAPI } from './business-funnel-api.js';
 import cors from 'cors';
 import { execSync } from 'child_process';
 import {
@@ -44,9 +43,8 @@ let appDir = getAppDir(currentWorkspace);
 app.use(cors());
 app.use(express.json());
 
-// Initialize registry and business funnel API (will be re-initialized on workspace change)
+// Initialize registry (will be re-initialized on workspace change)
 let registry = new VizRegistry(appDir);
-let businessFunnelAPI = new BusinessFunnelAPI(currentWorkspace);
 
 console.log(`📁 Current workspace: ${currentWorkspace}`);
 console.log(`📁 Config file: ${getConfigPath()}`);
@@ -59,9 +57,8 @@ function switchWorkspace(workspacePath) {
   currentWorkspace = workspacePath;
   appDir = getAppDir(currentWorkspace);
 
-  // Re-initialize registry and business funnel API
+  // Re-initialize registry
   registry = new VizRegistry(appDir);
-  businessFunnelAPI = new BusinessFunnelAPI(currentWorkspace);
 
   // Persist workspace selection
   setCurrentWorkspace(workspacePath);
@@ -69,61 +66,6 @@ function switchWorkspace(workspacePath) {
   console.log(`🔄 Switched to workspace: ${currentWorkspace}`);
   console.log(`📁 New registry path: ${registry.registryPath}`);
 }
-
-/**
- * GET /api/business-funnel
- * Get business funnel data with optional range or date parameters
- * ?range=mtd|ytd|all (default: mtd)
- * OR ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
- */
-app.get('/api/business-funnel', (req, res) => {
-  const { range, startDate, endDate } = req.query;
-
-  // Use custom date range if provided, otherwise use range parameter
-  if (startDate && endDate) {
-    console.log(`📊 Business funnel data request: ${startDate} to ${endDate}`);
-
-    try {
-      const result = businessFunnelAPI.getBusinessFunnelDataByDates(startDate, endDate);
-
-      console.log(`✅ Returned ${result.total} data points for date range`);
-      console.log(`📅 Date range: ${result.dateRange.start} to ${result.dateRange.end}`);
-
-      res.json({
-        success: true,
-        ...result
-      });
-    } catch (error) {
-      console.error(`❌ Business funnel API error:`, error);
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  } else {
-    const rangeParam = range || 'mtd';
-    console.log(`📊 Business funnel data request: range=${rangeParam}`);
-
-    try {
-      const result = businessFunnelAPI.getBusinessFunnelData(rangeParam);
-
-      console.log(`✅ Returned ${result.total} data points for range: ${rangeParam}`);
-      console.log(`📅 Date range: ${result.dateRange.start} to ${result.dateRange.end}`);
-
-      res.json({
-        success: true,
-        ...result
-      });
-
-    } catch (error) {
-      console.error(`❌ Business funnel API error:`, error);
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  }
-});
 
 /**
  * GET /api/marketing-spend
@@ -867,23 +809,22 @@ app.get('/api/workspace/stats', (req, res) => {
 app.get('/api/workspace/framework-stats', (req, res) => {
   try {
     const frameworkDirs = ['tools', 'web-app', 'electron-app', 'scripts'];
-    const coreFrameworkPath = '/Users/ryanriggin/Work/localbase.ai';
 
     // Check if current workspace is a subdirectory (like my-workspace)
-    // If so, use parent directory for instance framework stats
-    let instanceFrameworkRoot = currentWorkspace;
+    // If so, use parent directory for framework stats
+    let frameworkRoot = currentWorkspace;
     const workspaceName = basename(currentWorkspace);
     if (workspaceName === 'my-workspace' || workspaceName.endsWith('-workspace')) {
-      instanceFrameworkRoot = dirname(currentWorkspace);
+      frameworkRoot = dirname(currentWorkspace);
     }
 
-    // Calculate instance framework stats (current workspace)
+    // Calculate framework stats
     let instanceFiles = 0;
     let instanceSize = 0;
     let lastModified = null;
 
     frameworkDirs.forEach(dir => {
-      const dirPath = join(instanceFrameworkRoot, dir);
+      const dirPath = join(frameworkRoot, dir);
       if (existsSync(dirPath)) {
         try {
           const fileCount = execSync(`find "${dirPath}" -type f 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
@@ -896,23 +837,6 @@ app.get('/api/workspace/framework-stats', (req, res) => {
           if (!lastModified || modTime > lastModified) {
             lastModified = modTime;
           }
-        } catch (e) {}
-      }
-    });
-
-    // Calculate core framework stats (source repo)
-    let coreFiles = 0;
-    let coreSize = 0;
-
-    frameworkDirs.forEach(dir => {
-      const dirPath = join(coreFrameworkPath, dir);
-      if (existsSync(dirPath)) {
-        try {
-          const fileCount = execSync(`find "${dirPath}" -type f 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
-          coreFiles += parseInt(fileCount) || 0;
-
-          const dirSize = execSync(`du -sk "${dirPath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-          coreSize += parseInt(dirSize) || 0;
         } catch (e) {}
       }
     });
@@ -947,14 +871,10 @@ app.get('/api/workspace/framework-stats', (req, res) => {
 
     res.json({
       success: true,
-      coreFramework: {
-        files: coreFiles,
-        size: formatSize(coreSize)
-      },
-      instanceFramework: {
+      framework: {
         files: instanceFiles,
         size: formatSize(instanceSize),
-        lastSync: lastSyncFormatted
+        lastModified: lastSyncFormatted
       }
     });
   } catch (error) {
@@ -1092,7 +1012,6 @@ app.listen(PORT, '127.0.0.1', () => {
   console.log(`   GET    /api/workspaces         - List available workspaces`);
   console.log(`   POST   /api/workspace/switch   - Switch to different workspace`);
   console.log(`   GET    /api/workspace          - Current workspace info`);
-  console.log(`   GET    /api/business-funnel    - Business funnel data (range: mtd|ytd|all)`);
   console.log(`   DELETE /api/viz/:id            - Delete visualization`);
   console.log(`   GET    /api/viz                - List all visualizations`);
   console.log(`   GET    /health                 - Health check`);

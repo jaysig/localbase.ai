@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -114,3 +113,6 @@ mcp/server.log
 .pricing.md
 app/assets/test-*.gif
 app/assets/vince-*.gif
+
+# Electron temp files
+electron-app/tmp/

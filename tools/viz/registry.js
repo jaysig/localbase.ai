@@ -14,16 +14,21 @@ export class VizRegistry {
 
   /**
    * Detect workspace from current working directory
-   * Returns: 'goskills', 'renu', 'framework', or 'unknown'
+   * Returns: workspace name based on directory structure
    */
   detectWorkspace() {
     const cwd = process.cwd();
+    const parts = cwd.split('/');
 
-    if (cwd.includes('/goskills')) return 'goskills';
-    if (cwd.includes('/renu')) return 'renu';
-    if (cwd.includes('/localbase.ai')) return 'framework';
+    // Try to find workspace name from path
+    // Look for common patterns like ~/Work/workspace-name/
+    const workIdx = parts.indexOf('Work');
+    if (workIdx >= 0 && workIdx < parts.length - 1) {
+      return parts[workIdx + 1];
+    }
 
-    return 'unknown';
+    // Fallback to 'default' workspace
+    return 'default';
   }
 
   /**
