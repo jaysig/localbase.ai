@@ -1,15 +1,17 @@
 {
   "visualizations": [
     {
-      "id": "workspace-stats",
-      "filename": "workspace-stats.html",
-      "title": "📊 Workspace Stats",
-      "description": "Real-time workspace statistics including visualizations, connectors, and data sources",
-      "type": "dashboard",
+      "id": "setup",
+      "filename": "setup.html",
+      "title": "Getting Started",
+      "description": "Create your first workspace",
+      "type": "setup",
       "category": "framework",
-      "library": "apexcharts",
-      "url": "/viz/workspace-stats.html",
-      "createdAt": "2025-11-13T00:00:00.000Z"
+      "library": "html",
+      "url": "/viz/setup.html",
+      "size": "large",
+      "createdAt": "2025-11-14T17:00:00.000Z",
+      "updatedAt": "2025-11-14T17:00:00.000Z"
     }
   ]
 }

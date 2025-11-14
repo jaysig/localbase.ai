@@ -30,6 +30,12 @@ const PORT = 3000;
 // Get current workspace from persistent config
 let currentWorkspace = getCurrentWorkspace();
 
+// Detect if running from framework (localbase.ai) vs instance
+// Check if process.cwd() matches the directory containing this script
+const cwd = process.cwd();
+const scriptDir = dirname(__dirname); // tools/server -> up 2 levels from __dirname
+const isFrameworkMode = cwd === scriptDir;
+
 // Detect app directory (web-app/ for newer instances, app/ for older ones)
 function getAppDir(workspace) {
   const webAppDir = join(workspace, 'web-app');
@@ -37,7 +43,8 @@ function getAppDir(workspace) {
   return existsSync(join(webAppDir, 'index.html')) ? webAppDir : appDir;
 }
 
-let appDir = getAppDir(currentWorkspace);
+// In framework mode, always serve from framework's web-app directory
+let appDir = isFrameworkMode ? join(cwd, 'web-app') : getAppDir(currentWorkspace);
 
 // Middleware
 app.use(cors());
@@ -49,6 +56,9 @@ let registry = new VizRegistry(appDir);
 console.log(`📁 Current workspace: ${currentWorkspace}`);
 console.log(`📁 Config file: ${getConfigPath()}`);
 console.log(`📁 Registry path: ${registry.registryPath}`);
+if (isFrameworkMode) {
+  console.log(`⚠️  Framework mode detected - serving onboarding page`);
+}
 
 /**
  * Switch to a different workspace
