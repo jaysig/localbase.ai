@@ -1,15 +1,3 @@
 {
-  "visualizations": [
-    {
-      "id": "start",
-      "filename": "start.html",
-      "title": "🚀 Start",
-      "description": "Getting started with LocalBase - framework structure and quick start guide",
-      "type": "guide",
-      "library": "none",
-      "url": "/viz/start.html",
-      "workspace": "my-workspace",
-      "createdAt": "2025-11-13T00:00:00.000Z"
-    }
-  ]
+  "visualizations": []
 }
