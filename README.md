@@ -9,19 +9,11 @@ Query your business data (QuickBooks, HubSpot, etc.) with AI. Everything runs lo
 ```bash
 git clone https://github.com/rriggin/localbase.ai.git
 cd localbase.ai
-
-# Create your workspace
-mv my-workspace ../my-workspace
-cd ../my-workspace
-
-# Install and start
 npm install
 npm start
 ```
 
-Open http://localhost:3000 to see your workspace dashboard.
-
-> **Note:** Running from the framework directory shows a setup guide at http://localhost:3000
+Open http://localhost:3000 - you'll see a setup guide with instructions to create your first workspace.
 
 ## Ask AI About Your Data
 
@@ -80,11 +72,10 @@ The desktop app includes:
 ```
 localbase.ai/
 ├── tools/           # Framework (MCP server, charts, etc.)
-├── connectors/      # Your data sources
+├── connectors/      # Your data sources (start with examples)
 ├── data/           # SQLite databases
 ├── web-app/        # Dashboard
-├── electron-app/   # Desktop application
-└── my-workspace/   # Template workspace (move to parent dir)
+└── electron-app/   # Desktop application
 ```
 
 ## Stack

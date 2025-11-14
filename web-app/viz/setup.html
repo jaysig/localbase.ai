@@ -88,10 +88,14 @@
 
     <div class="step">
         <h2><span class="step-num">1</span> Create a workspace</h2>
-        <p>Move the template workspace and install dependencies:</p>
-        <pre># From the framework directory
-mv my-workspace ../my-workspace
-cd ../my-workspace
+        <p>Create a new directory and initialize your workspace:</p>
+        <pre># Create workspace in parent directory
+cd ..
+mkdir my-workspace
+cd my-workspace
+
+# Copy framework files (or clone from your fork)
+cp -r ../localbase.ai/* .
 npm install
 npm start</pre>
     </div>
