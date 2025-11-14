@@ -1,6 +1,6 @@
 # LocalBase
 
-**Local AI data stack for your business**
+**Local AI tools for SMBs**
 
 Query your business data (QuickBooks, HubSpot, etc.) with AI. Everything runs locally on your machine.
 
@@ -87,5 +87,3 @@ Automatically checks for:
 - Environment variables
 
 ---
-
-*Your data, your machine, your insights.*
