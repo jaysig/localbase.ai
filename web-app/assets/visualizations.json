@@ -1,17 +1,5 @@
 {
-  "visualizations": [
-    {
-      "id": "setup",
-      "filename": "setup.html",
-      "title": "Getting Started",
-      "description": "Create your first workspace",
-      "type": "setup",
-      "category": "framework",
-      "library": "html",
-      "url": "/viz/setup.html",
-      "size": "large",
-      "createdAt": "2025-11-14T17:00:00.000Z",
-      "updatedAt": "2025-11-14T17:00:00.000Z"
-    }
-  ]
+  "visualizations": [],
+  "lastUpdated": "2025-11-14T18:03:18.459Z",
+  "totalVisualizations": 0
 }
