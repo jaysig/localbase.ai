@@ -1148,10 +1148,31 @@ ipcMain.handle('api:syncDataSource', async (event, sourceId) => {
 
     console.log(`🚀 Running sync command: ${executable} ${args.join(' ')}`)
 
+    // Fix PATH for spawned processes - Electron doesn't inherit full shell PATH
+    const fixedEnv = {
+      ...process.env,
+      PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+    }
+
+    // Add common node locations to PATH if not already there
+    const nodePaths = [
+      '/usr/local/bin',
+      '/opt/homebrew/bin', // Apple Silicon Homebrew
+      path.join(os.homedir(), '.nvm/versions/node'), // nvm
+      '/Users/' + os.userInfo().username + '/.nvm/versions/node'
+    ]
+
+    for (const nodePath of nodePaths) {
+      if (!fixedEnv.PATH.includes(nodePath)) {
+        fixedEnv.PATH = `${nodePath}:${fixedEnv.PATH}`
+      }
+    }
+
     return new Promise((resolve) => {
       const child = spawn(executable, args, {
         cwd: currentProjectRoot,
-        env: process.env
+        env: fixedEnv,
+        shell: true // Use shell to ensure proper PATH resolution
       })
 
       let output = ''
