@@ -1111,9 +1111,12 @@ ipcMain.handle('api:getDataSources', async () => {
 ipcMain.handle('api:syncDataSource', async (event, sourceId) => {
   try {
     console.log(`🔄 Syncing data source: ${sourceId}`)
+    console.log(`📂 Current project root: ${currentProjectRoot}`)
 
     // Load data-sources.json to get sync script path
     const dataSourcesPath = path.join(currentProjectRoot, 'data', 'data-sources.json')
+    console.log(`📄 Reading data-sources.json from: ${dataSourcesPath}`)
+
     const data = await fs.readFile(dataSourcesPath, 'utf-8')
     const dataSources = JSON.parse(data)
 
@@ -1147,6 +1150,8 @@ ipcMain.handle('api:syncDataSource', async (event, sourceId) => {
     }
 
     console.log(`🚀 Running sync command: ${executable} ${args.join(' ')}`)
+    console.log(`📂 Working directory: ${currentProjectRoot}`)
+    console.log(`📝 Full script path: ${fullScriptPath}`)
 
     // Fix PATH for spawned processes - Electron doesn't inherit full shell PATH
     const fixedEnv = {
@@ -1189,11 +1194,14 @@ ipcMain.handle('api:syncDataSource', async (event, sourceId) => {
       })
 
       child.on('close', async (code) => {
+        console.log(`🏁 Sync process exited with code: ${code}`)
+
         if (code === 0) {
           console.log(`✅ Sync completed for ${sourceId}`)
 
           // Update the last_sync timestamp in data-sources.json
           try {
+            console.log(`📝 Updating timestamp in: ${dataSourcesPath}`)
             const updatedData = await fs.readFile(dataSourcesPath, 'utf-8')
             const updatedDataSources = JSON.parse(updatedData)
 
@@ -1204,6 +1212,9 @@ ipcMain.handle('api:syncDataSource', async (event, sourceId) => {
 
               await fs.writeFile(dataSourcesPath, JSON.stringify(updatedDataSources, null, 2), 'utf-8')
               console.log(`📅 Updated last_sync timestamp for ${sourceId} to ${today}`)
+              console.log(`✅ Timestamp update successful!`)
+            } else {
+              console.error(`⚠️ Source ${sourceId} not found in data-sources.json after sync`)
             }
           } catch (timestampError) {
             console.error(`⚠️ Failed to update timestamp for ${sourceId}:`, timestampError)
