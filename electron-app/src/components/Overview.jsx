@@ -252,6 +252,7 @@ export default function Overview({ onNavigateHome }) {
             }
           }, 500)
         } else {
+          console.error(`Sync failed for ${sourceId}:`, result.error, result.output)
           setSyncStatus(prev => ({ ...prev, [sourceId]: 'error' }))
         }
       }
@@ -260,10 +261,10 @@ export default function Overview({ onNavigateHome }) {
       setSyncStatus(prev => ({ ...prev, [sourceId]: 'error' }))
     } finally {
       setSyncingSource(null)
-      // Clear status after 3 seconds
+      // Clear status after 5 seconds (was 3, give more time to read)
       setTimeout(() => {
         setSyncStatus(prev => ({ ...prev, [sourceId]: null }))
-      }, 3000)
+      }, 5000)
     }
   }
 
@@ -343,7 +344,17 @@ export default function Overview({ onNavigateHome }) {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {connectors.map((connector) => (
+            {connectors
+              .sort((a, b) => {
+                // Sort order: active (1), missing-index (2), needs-fix (3)
+                const statusPriority = {
+                  'active': 1,
+                  'missing-index': 2,
+                  'needs-fix': 3
+                }
+                return (statusPriority[a.status] || 99) - (statusPriority[b.status] || 99)
+              })
+              .map((connector) => (
               <Card key={connector.id}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

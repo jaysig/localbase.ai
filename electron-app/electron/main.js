@@ -906,6 +906,17 @@ ipcMain.handle('api:getConnectors', async () => {
       }
     }
 
+    // Load data-sources.json to get accurate data locations and metadata
+    let dataSources = {}
+    try {
+      const dataSourcesPath = path.join(currentProjectRoot, 'data', 'data-sources.json')
+      const dataSourcesData = await fs.readFile(dataSourcesPath, 'utf-8')
+      const dataSourcesJson = JSON.parse(dataSourcesData)
+      dataSources = dataSourcesJson.sources || {}
+    } catch (error) {
+      console.log('📋 No data-sources.json found, using fallback detection')
+    }
+
     const entries = await fs.readdir(connectorsPath, { withFileTypes: true })
     const connectors = []
 
@@ -923,31 +934,50 @@ ipcMain.handle('api:getConnectors', async () => {
           let lastSync = null
           let dataDir = null
 
-          // Look for schema file (could be schema.json or {name}-schema.json)
-          const connectorFiles = await fs.readdir(connectorDir)
-          const schemaFile = connectorFiles.find(f => f.endsWith('-schema.json') || f === 'schema.json')
+          // First, try to match with data-sources.json entry
+          const matchingSource = Object.entries(dataSources).find(([sourceId, sourceData]) => {
+            return sourceData.connector && sourceData.connector.includes(entry.name)
+          })
 
-          if (schemaFile) {
-            try {
-              const schemaPath = path.join(connectorDir, schemaFile)
-              const schemaData = await fs.readFile(schemaPath, 'utf-8')
-              const schema = JSON.parse(schemaData)
-              description = schema.description || description
+          if (matchingSource) {
+            const [sourceId, sourceData] = matchingSource
+            description = sourceData.name || description
 
-              // Extract data directory from data_location field if present
-              if (schema.data_location) {
-                // e.g., "data/g2-visits/file.csv" -> "data/g2-visits"
-                const locationParts = schema.data_location.split('/')
-                if (locationParts.length >= 2 && locationParts[0] === 'data') {
-                  dataDir = path.join(currentProjectRoot, locationParts[0], locationParts[1])
-                }
-              }
-            } catch {
-              // Schema file exists but couldn't read it
+            // Get data location from data-sources.json
+            if (sourceData.storage && sourceData.storage.location) {
+              dataDir = path.join(currentProjectRoot, path.dirname(sourceData.storage.location))
+            } else if (sourceData.storage && sourceData.storage.database) {
+              dataDir = path.join(currentProjectRoot, path.dirname(sourceData.storage.database))
             }
           }
 
-          // If schema didn't specify data location, fall back to name-based lookup
+          // Fallback: Look for schema file (could be schema.json or {name}-schema.json)
+          if (!dataDir) {
+            const connectorFiles = await fs.readdir(connectorDir)
+            const schemaFile = connectorFiles.find(f => f.endsWith('-schema.json') || f === 'schema.json')
+
+            if (schemaFile) {
+              try {
+                const schemaPath = path.join(connectorDir, schemaFile)
+                const schemaData = await fs.readFile(schemaPath, 'utf-8')
+                const schema = JSON.parse(schemaData)
+                description = schema.description || description
+
+                // Extract data directory from data_location field if present
+                if (schema.data_location) {
+                  // e.g., "data/g2-visits/file.csv" -> "data/g2-visits"
+                  const locationParts = schema.data_location.split('/')
+                  if (locationParts.length >= 2 && locationParts[0] === 'data') {
+                    dataDir = path.join(currentProjectRoot, locationParts[0], locationParts[1])
+                  }
+                }
+              } catch {
+                // Schema file exists but couldn't read it
+              }
+            }
+          }
+
+          // Final fallback: name-based lookup
           if (!dataDir) {
             dataDir = path.join(currentProjectRoot, 'data', entry.name.replace(/-/g, '_'))
           }
@@ -1095,24 +1125,31 @@ ipcMain.handle('api:syncDataSource', async (event, sourceId) => {
       }
     }
 
-    if (!source.sync_script) {
+    // Support both sync_script and update_command field names
+    const syncCommand = source.sync_script || source.update_command
+    if (!syncCommand) {
       return {
         success: false,
         error: `No sync script defined for '${sourceId}'`
       }
     }
 
-    // Run the sync script with last_sync date as argument
-    const scriptPath = path.join(currentProjectRoot, source.sync_script)
-    const args = [scriptPath]
+    // Parse the command (e.g., "node connectors/quickbooks/sync.js")
+    const commandParts = syncCommand.trim().split(/\s+/)
+    const executable = commandParts[0] // 'node'
+    const scriptPath = commandParts.slice(1).join(' ') // 'connectors/quickbooks/sync.js'
+    const fullScriptPath = path.join(currentProjectRoot, scriptPath)
+    const args = [fullScriptPath]
 
-    // Pass last sync date if available for incremental sync
-    if (source.last_sync) {
+    // Pass last sync date if available for incremental sync (only if not "Unknown")
+    if (source.last_sync && source.last_sync !== 'Unknown') {
       args.push('--since', source.last_sync)
     }
 
+    console.log(`🚀 Running sync command: ${executable} ${args.join(' ')}`)
+
     return new Promise((resolve) => {
-      const child = spawn('node', args, {
+      const child = spawn(executable, args, {
         cwd: currentProjectRoot,
         env: process.env
       })
