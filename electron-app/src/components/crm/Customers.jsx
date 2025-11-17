@@ -54,7 +54,7 @@ export default function Customers() {
         return
       }
 
-      // Get customers who have made payments (implies QuickBooks profile)
+      // Get all customers with payment info if available
       const query = `
         SELECT DISTINCT
           c.id,
@@ -63,16 +63,17 @@ export default function Customers() {
           c.email,
           c.phone,
           c.primary_address,
-          COUNT(DISTINCT payments.id) as payment_count,
-          SUM(CAST(payments.amount AS REAL)) as total_paid,
-          MAX(payments.date_created) as last_payment_date,
-          MIN(payments.date_created) as first_payment_date
+          COUNT(DISTINCT CASE WHEN payments.relationship_type = 'payment' THEN payments.id END) as payment_count,
+          COALESCE(SUM(CASE WHEN payments.relationship_type = 'payment' THEN CAST(payments.amount AS REAL) END), 0) as total_paid,
+          MAX(CASE WHEN payments.relationship_type = 'payment' THEN payments.date_created END) as last_payment_date,
+          MIN(CASE WHEN payments.relationship_type = 'payment' THEN payments.date_created END) as first_payment_date
         FROM customers c
-        JOIN customer_relationships payments
+        LEFT JOIN customer_relationships payments
           ON payments.customer_id = c.id
-          AND payments.relationship_type = 'payment'
         GROUP BY c.id
-        ORDER BY last_payment_date DESC
+        ORDER BY
+          CASE WHEN last_payment_date IS NULL THEN 1 ELSE 0 END,
+          last_payment_date DESC
       `
 
       const result = await window.electronAPI.db.query(query, [])
@@ -139,7 +140,8 @@ export default function Customers() {
       textSearch: null,
       totalPaid: { min: null, max: null },
       paymentCount: { min: null, max: null },
-      dateRange: { start: null, end: null }
+      dateRange: { start: null, end: null },
+      hasPaid: null // true = paid customers only, false = unpaid only, null = all
     }
 
     if (!searchTerm) return filters
@@ -176,6 +178,15 @@ export default function Customers() {
     }
 
     const lower = cleanedTerm.toLowerCase().trim()
+
+    // Check for "paid" or "unpaid" keywords
+    if (lower.match(/\b(un)?paid\b/)) {
+      if (lower.match(/\bunpaid\b/)) {
+        filters.hasPaid = false
+      } else if (lower.match(/\bpaid\b/)) {
+        filters.hasPaid = true
+      }
+    }
 
     // Parse payment count FIRST (more specific)
     // Patterns: >5 payments, >5, < 3 payments, more than 5 payments
@@ -243,6 +254,7 @@ export default function Customers() {
       .replace(/(?:more than|less than|fewer than|>|<)\s*\d+(?:\s*payments?)?/gi, '')
       .replace(/last\s+\d+\s+days?/gi, '')
       .replace(/this\s+(month|year)/gi, '')
+      .replace(/\b(un)?paid\b/gi, '')
       .trim()
 
     // Remove common filler words that don't help with search
@@ -315,6 +327,13 @@ export default function Customers() {
       // Date range filters
       if (filters.dateRange.start !== null) {
         if (!customer.last_payment_date || customer.last_payment_date < filters.dateRange.start) return false
+      }
+
+      // Paid/unpaid filter
+      if (filters.hasPaid !== null) {
+        const hasPayments = customer.payment_count > 0
+        if (filters.hasPaid && !hasPayments) return false
+        if (!filters.hasPaid && hasPayments) return false
       }
 
       return true
@@ -557,7 +576,7 @@ export default function Customers() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Customers</h1>
-            <p className="text-sm text-gray-400">{filteredCustomers.length} paying customers</p>
+            <p className="text-sm text-gray-400">{filteredCustomers.length} customers</p>
           </div>
         </div>
 
@@ -567,7 +586,7 @@ export default function Customers() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               type="text"
-              placeholder="Search: 'over 10k', '>5 payments', 'this month', or name/email..."
+              placeholder="Search: 'paid', 'unpaid', 'over 10k', '>5 payments', 'this month', or name/email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 w-full"
@@ -579,7 +598,7 @@ export default function Customers() {
             const filters = parseFilters(debouncedSearchTerm)
             const hasFilters = filters.totalPaid.min || filters.totalPaid.max ||
                               filters.paymentCount.min || filters.paymentCount.max ||
-                              filters.dateRange.start
+                              filters.dateRange.start || filters.hasPaid !== null
 
             if (!hasFilters) return null
 
@@ -608,6 +627,16 @@ export default function Customers() {
                 {filters.dateRange.start && (
                   <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded">
                     📅 Since {new Date(filters.dateRange.start).toLocaleDateString()}
+                  </span>
+                )}
+                {filters.hasPaid === true && (
+                  <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded">
+                    ✓ Paid Customers Only
+                  </span>
+                )}
+                {filters.hasPaid === false && (
+                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded">
+                    ⚠ Unpaid Customers Only
                   </span>
                 )}
                 {filters.textSearch && (
