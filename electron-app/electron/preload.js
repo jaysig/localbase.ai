@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   api: {
     getVisualizations: () => ipcRenderer.invoke('api:getVisualizations'),
     deleteVisualization: (id) => ipcRenderer.invoke('api:deleteVisualization', id),
+    toggleVizPin: (id, pinned) => ipcRenderer.invoke('api:toggleVizPin', id, pinned),
     getCallMetrics: (params) => ipcRenderer.invoke('api:getCallMetrics', params),
     getTools: () => ipcRenderer.invoke('api:getTools'),
     getToolConfig: (toolId) => ipcRenderer.invoke('api:getToolConfig', toolId),
