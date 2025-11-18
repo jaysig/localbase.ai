@@ -46,7 +46,16 @@ function getAppDir(workspace) {
 // In framework mode, always serve from framework's web-app directory
 let appDir = isFrameworkMode ? join(cwd, 'web-app') : getAppDir(currentWorkspace);
 
-// Middleware
+// Middleware - Allow CORS for Electron (null origin) and regular browsers
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 app.use(cors());
 app.use(express.json());
 
@@ -443,6 +452,66 @@ app.get('/api/call-metrics', (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+/**
+ * GET /api/metrics/:metricId
+ * Generic metrics API endpoint (FRAMEWORK CODE)
+ * Reads metrics configuration from instance's metrics-config.js
+ */
+app.get('/api/metrics/:metricId', async (req, res) => {
+  try {
+    const { metricId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    // Load metrics config from current workspace
+    const metricsConfigPath = join(currentWorkspace, 'metrics-config.js');
+    if (!existsSync(metricsConfigPath)) {
+      return res.status(500).json({ error: 'Metrics configuration not found in workspace' });
+    }
+
+    const { default: metricsConfig } = await import(`file://${metricsConfigPath}`);
+    const metric = metricsConfig.metrics[metricId];
+
+    if (!metric) {
+      return res.status(404).json({ error: `Metric '${metricId}' not found` });
+    }
+
+    // Open database connection (resolve path relative to workspace)
+    const dbPath = join(currentWorkspace, metric.database);
+    const db = new Database(dbPath, { readonly: true });
+
+    try {
+      // Execute query with date parameters if provided
+      const params = {};
+      if (startDate && endDate) {
+        params.startDate = startDate;
+        params.endDate = endDate;
+      }
+
+      const stmt = db.prepare(metric.query);
+      const result = stmt.get(params);
+
+      db.close();
+
+      res.json({
+        metricId,
+        value: result ? result.value : 0,
+        label: metric.label,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (dbError) {
+      db.close();
+      throw dbError;
+    }
+
+  } catch (error) {
+    console.error(`❌ Metrics API error:`, error);
+    res.status(500).json({ error: error.message });
   }
 });
 
