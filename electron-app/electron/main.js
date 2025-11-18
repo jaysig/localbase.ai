@@ -1433,6 +1433,50 @@ ipcMain.handle('api:deleteVisualization', async (event, id) => {
   }
 })
 
+// POST /api/viz/:id/pin - Toggle pin status
+ipcMain.handle('api:toggleVizPin', async (event, id, pinned) => {
+  try {
+    // Check both web-app and app directories
+    const webAppRegistry = path.join(currentProjectRoot, 'web-app', 'assets', 'visualizations.json')
+    const appRegistry = path.join(currentProjectRoot, 'app', 'assets', 'visualizations.json')
+
+    let vizRegistryPath
+    try {
+      await fs.access(webAppRegistry)
+      vizRegistryPath = webAppRegistry
+    } catch {
+      vizRegistryPath = appRegistry
+    }
+
+    const data = await fs.readFile(vizRegistryPath, 'utf-8')
+    const registry = JSON.parse(data)
+
+    // Find and update the visualization
+    const vizIndex = registry.visualizations?.findIndex(v => v.id === id)
+    if (vizIndex === -1) {
+      return {
+        success: false,
+        error: `Visualization not found: ${id}`
+      }
+    }
+
+    registry.visualizations[vizIndex].pinned = pinned
+    await fs.writeFile(vizRegistryPath, JSON.stringify(registry, null, 2))
+
+    return {
+      success: true,
+      message: `Visualization ${pinned ? 'pinned' : 'unpinned'} successfully`,
+      viz: registry.visualizations[vizIndex]
+    }
+  } catch (error) {
+    console.error('Error toggling pin:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+})
+
 // File watchers for live reloading visualizations
 const fileWatchers = new Map()
 let vizDirectoryWatcher = null

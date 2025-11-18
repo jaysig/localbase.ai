@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, BarChart3, Trash2, LayoutGrid, List, Search } from 'lucide-react'
+import { X, BarChart3, Trash2, LayoutGrid, List, Search, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import CallMetricsChart from '@/components/charts/CallMetricsChart'
@@ -130,6 +130,26 @@ export default function VisualizationViewer() {
     }
   }
 
+  const handlePin = async (e, viz) => {
+    e.stopPropagation() // Prevent card click
+
+    try {
+      const newPinnedState = !viz.pinned
+      const result = await window.electronAPI.api.toggleVizPin(viz.id, newPinnedState)
+
+      if (result.success) {
+        // Update local state immediately
+        setVisualizations(prev => prev.map(v =>
+          v.id === viz.id ? { ...v, pinned: newPinnedState } : v
+        ))
+      } else {
+        alert(`Failed to ${newPinnedState ? 'pin' : 'unpin'}: ${result.error}`)
+      }
+    } catch (err) {
+      alert(`Error ${viz.pinned ? 'unpinning' : 'pinning'} visualization: ${err.message}`)
+    }
+  }
+
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Unknown'
     const date = new Date(dateStr)
@@ -219,6 +239,10 @@ export default function VisualizationViewer() {
     return dateB - dateA // Newest first
   })
 
+  // Separate pinned and unpinned visualizations
+  const pinnedViz = filteredVisualizations.filter(v => v.pinned)
+  const unpinnedViz = filteredVisualizations.filter(v => !v.pinned)
+
   // Show visualization gallery
   return (
     <div className="p-8">
@@ -299,8 +323,16 @@ export default function VisualizationViewer() {
 
       {/* Grid View */}
       {viewMode === 'grid' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredVisualizations.map((viz) => (
+        <>
+          {/* Pinned Section */}
+          {pinnedViz.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-sm font-semibold text-yellow-400 mb-3 flex items-center gap-2">
+                <Star className="h-4 w-4 fill-yellow-400" />
+                Pinned ({pinnedViz.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pinnedViz.map((viz) => (
           <Card
             key={viz.id}
             className="group cursor-pointer transition-all hover:border-green-400/50 overflow-hidden"
@@ -348,6 +380,15 @@ export default function VisualizationViewer() {
                   <span>{viz.library}</span>
                 </div>
               </div>
+              {/* Pin button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-8 w-8 transition-opacity ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                onClick={(e) => handlePin(e, viz)}
+              >
+                <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
+              </Button>
               {/* Delete button */}
               <Button
                 variant="ghost"
@@ -360,8 +401,94 @@ export default function VisualizationViewer() {
               </Button>
             </div>
           </Card>
-        ))}
-        </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* All/Unpinned Section */}
+          {unpinnedViz.length > 0 && (
+            <div>
+              {pinnedViz.length > 0 && (
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                  All Visualizations ({unpinnedViz.length})
+                </h3>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {unpinnedViz.map((viz) => (
+          <Card
+            key={viz.id}
+            className="group cursor-pointer transition-all hover:border-green-400/50 overflow-hidden"
+            onClick={() => {
+              console.log('🖱️ VisualizationViewer: Card clicked:', viz.title)
+
+              // Prepare viz data for LiveWorkspace
+              const vizData = {
+                id: viz.id,
+                title: viz.title,
+                filename: viz.filename,
+                url: `localbase://app/viz/${viz.filename}?t=${Date.now()}`
+              }
+
+              // Save to localStorage (for when LiveWorkspace isn't mounted yet)
+              console.log('💾 VisualizationViewer: Saving to localStorage for LiveWorkspace')
+              localStorage.setItem('liveWorkspace_lastSession', JSON.stringify(vizData))
+
+              // Also dispatch event (for when LiveWorkspace IS already mounted)
+              console.log('📤 VisualizationViewer: Dispatching event to LiveWorkspace')
+              window.dispatchEvent(new CustomEvent('liveWorkspace:loadViz', { detail: viz }))
+
+              // Show in full-screen viewer
+              console.log('🖼️ VisualizationViewer: Opening full-screen view')
+              setSelectedViz(viz)
+            }}
+          >
+            <div className="flex gap-3 p-3">
+              {/* Icon placeholder (no iframe preview to avoid loading all visualizations) */}
+              <div className="w-20 h-20 flex-shrink-0 bg-background/50 relative overflow-hidden rounded border border-border/50 flex items-center justify-center">
+                <BarChart3 className="h-10 w-10 text-green-400/30" />
+              </div>
+              {/* Content */}
+              <div className="flex-1 min-w-0 py-1">
+                <div className="flex items-start gap-2 mb-1">
+                  <BarChart3 className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
+                  <h3 className="text-sm font-semibold leading-tight">{viz.title}</h3>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {viz.description || `Created ${formatDate(viz.createdAt)}`}
+                </p>
+                <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
+                  <span className="capitalize">{viz.type}</span>
+                  <span>•</span>
+                  <span>{viz.library}</span>
+                </div>
+              </div>
+              {/* Pin button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-8 w-8 transition-opacity ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                onClick={(e) => handlePin(e, viz)}
+              >
+                <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
+              </Button>
+              {/* Delete button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                onClick={(e) => handleDelete(e, viz)}
+                disabled={deletingId === viz.id}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* List View */}
