@@ -344,7 +344,7 @@ export default function VisualizationViewer() {
                 id: viz.id,
                 title: viz.title,
                 filename: viz.filename,
-                url: `localbase://app/viz/${viz.filename}?t=${Date.now()}`
+                url: `localbase://viz/${viz.filename}?t=${Date.now()}`
               }
 
               // Save to localStorage (for when LiveWorkspace isn't mounted yet)
@@ -427,7 +427,7 @@ export default function VisualizationViewer() {
                 id: viz.id,
                 title: viz.title,
                 filename: viz.filename,
-                url: `localbase://app/viz/${viz.filename}?t=${Date.now()}`
+                url: `localbase://viz/${viz.filename}?t=${Date.now()}`
               }
 
               // Save to localStorage (for when LiveWorkspace isn't mounted yet)
@@ -506,7 +506,7 @@ export default function VisualizationViewer() {
                   id: viz.id,
                   title: viz.title,
                   filename: viz.filename,
-                  url: `localbase://app/viz/${viz.filename}?t=${Date.now()}`
+                  url: `localbase://viz/${viz.filename}?t=${Date.now()}`
                 }
 
                 // Save to localStorage (for when LiveWorkspace isn't mounted yet)

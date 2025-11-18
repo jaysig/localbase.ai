@@ -120,7 +120,7 @@ export default function LiveWorkspace() {
         id: viz.id,
         title: viz.title,
         filename: viz.filename,
-        url: `localbase://app/viz/${viz.filename}?t=${Date.now()}`
+        url: `localbase://viz/${viz.filename}?t=${Date.now()}`
       })
     }
 
@@ -154,7 +154,7 @@ export default function LiveWorkspace() {
         id: viz.id,
         title: viz.title,
         filename: viz.filename,
-        url: `localbase://app/viz/${viz.filename}?t=${Date.now()}`
+        url: `localbase://viz/${viz.filename}?t=${Date.now()}`
       })
     }
 
@@ -425,7 +425,7 @@ export default function LiveWorkspace() {
                             id: viz.id,
                             title: viz.title,
                             filename: viz.filename,
-                            url: `localbase://app/viz/${viz.filename}?t=${Date.now()}`
+                            url: `localbase://viz/${viz.filename}?t=${Date.now()}`
                           })
                           setSearchQuery('')
                         }
@@ -453,7 +453,7 @@ export default function LiveWorkspace() {
                               id: viz.id,
                               title: viz.title,
                               filename: viz.filename,
-                              url: `localbase://app/viz/${viz.filename}?t=${Date.now()}`
+                              url: `localbase://viz/${viz.filename}?t=${Date.now()}`
                             })
                             setSearchQuery('')
                           }}
