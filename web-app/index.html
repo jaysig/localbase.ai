@@ -1095,7 +1095,13 @@ claude
             } else if (currentFilter === 'new') {
                 // Show just the most recent visualization
                 if (filteredViz.length > 0) {
-                    filteredViz = [filteredViz[0]]; // Take only the first (newest) item
+                    // Sort by creation date to find most recent
+                    const sortedViz = [...filteredViz].sort((a, b) => {
+                        const dateA = new Date(a.createdAt || a.created || 0);
+                        const dateB = new Date(b.createdAt || b.created || 0);
+                        return dateB - dateA; // Most recent first
+                    });
+                    filteredViz = [sortedViz[0]]; // Take only the first (newest) item
                 }
             } else if (currentFilter === 'today') {
                 const today = new Date().toDateString();
@@ -1114,17 +1120,29 @@ claude
         function updateNewChartTab() {
             const newTab = document.getElementById('new-chart-tab');
 
+            console.log('🔥 UPDATE NEW CHART TAB:', {
+                hasViz: !!allVisualizations,
+                count: allVisualizations?.length,
+                newTab: !!newTab
+            });
+
             if (allVisualizations && allVisualizations.length > 0) {
-                // Show most recent visualization
-                const mostRecentViz = allVisualizations[0];
+                // Find most recent visualization by sorting by creation date
+                const sortedViz = [...allVisualizations].sort((a, b) => {
+                    const dateA = new Date(a.createdAt || a.created || 0);
+                    const dateB = new Date(b.createdAt || b.created || 0);
+                    return dateB - dateA; // Most recent first
+                });
+                const mostRecentViz = sortedViz[0];
+
+                console.log('🔥 MOST RECENT VIZ:', {
+                    title: mostRecentViz.title,
+                    createdAt: mostRecentViz.createdAt,
+                    created: mostRecentViz.created
+                });
+
                 newTab.textContent = `✨ ${(mostRecentViz.title || mostRecentViz.name || 'Visualization').replace('💰 ', '').replace('📊 ', '')}`;
                 newTab.style.display = 'inline-block';
-
-                // Auto-open the most recent visualization (no tab needed)
-                // Just show it embedded directly
-
-                // Auto-show chart disabled - let user click to view
-                // showEmbeddedChartNoScroll(mostRecentViz.url, mostRecentViz.name || mostRecentViz.title);
             }
         }
         
@@ -1797,7 +1815,13 @@ claude
                         hideDataTable();
                         // Show the newest chart embedded when clicking the new tab
                         if (allVisualizations && allVisualizations.length > 0) {
-                            const mostRecentChart = allVisualizations[0];
+                            // Find most recent visualization by sorting by creation date
+                            const sortedViz = [...allVisualizations].sort((a, b) => {
+                                const dateA = new Date(a.createdAt || a.created || 0);
+                                const dateB = new Date(b.createdAt || b.created || 0);
+                                return dateB - dateA; // Most recent first
+                            });
+                            const mostRecentChart = sortedViz[0];
                             showEmbeddedChart(mostRecentChart.url, mostRecentChart.name || mostRecentChart.title, true);
                         }
                     } else {
