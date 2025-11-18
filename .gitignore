@@ -116,3 +116,9 @@ app/assets/vince-*.gif
 
 # Electron temp files
 electron-app/tmp/
+
+# OAuth tokens and credentials
+connectors/**/gmail_token.json
+connectors/**/gmail_credentials.json
+connectors/**/*.token.json
+connectors/**/*_credentials.json
