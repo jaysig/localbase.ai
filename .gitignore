@@ -122,3 +122,4 @@ connectors/**/gmail_token.json
 connectors/**/gmail_credentials.json
 connectors/**/*.token.json
 connectors/**/*_credentials.json
+projects/
