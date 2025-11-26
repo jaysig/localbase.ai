@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react'
+import { initBrowserAPI } from '@/lib/browserAPI'
+
+// Initialize browser API shim if not in Electron
+initBrowserAPI()
 import {
   Settings,
   Menu,
@@ -230,8 +234,9 @@ function App() {
   }
 
   // Build combined navigation: core items + tool items + settings
+  // Note: Live Workspace hidden in browser mode (no terminal support)
   const coreNavItems = [
-    { id: 'live', label: 'Live Workspace', icon: Layout },
+    // { id: 'live', label: 'Live Workspace', icon: Layout },
     { id: 'visualizations', label: 'Visualizations', icon: LineChart },
   ]
 
@@ -350,7 +355,9 @@ function App() {
             <Home
               onWorkspaceSelected={() => {
                 loadWorkspace()
-                setSelectedView('live')
+                // In browser mode (no terminal), go to visualizations instead of live
+                const isBrowserMode = !window.electronAPI?.terminal
+                setSelectedView(isBrowserMode ? 'visualizations' : 'live')
               }}
             />
           ) : selectedView === 'visualizations' ? (

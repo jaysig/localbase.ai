@@ -47,12 +47,33 @@ export default function Home({ onWorkspaceSelected }) {
     const projects = []
 
     try {
+      // Browser mode: use workspaces API
+      if (window.electronAPI?.workspaces) {
+        const result = await window.electronAPI.workspaces.list()
+        if (result.success && result.workspaces) {
+          setAvailableProjects(result.workspaces.map(ws => ({
+            name: ws.name,
+            path: ws.path,
+            active: ws.active
+          })))
+          setScanning(false)
+          return
+        }
+      }
+
+      // Electron mode: scan filesystem
       if (!window.electronAPI?.files) {
         setScanning(false)
         return
       }
 
       const home = await window.electronAPI.files.getHome()
+      if (!home) {
+        // Browser mode fallback - no home directory available
+        setScanning(false)
+        return
+      }
+
       const locationsToScan = [`${home}/Work`, home]
 
       for (const location of locationsToScan) {
@@ -295,7 +316,9 @@ export default function Home({ onWorkspaceSelected }) {
                         try {
                           await window.electronAPI.config.setProjectRoot(project.path)
                           localStorage.setItem('localbase-workspace-selected', 'true')
-                          localStorage.setItem('localbase-selected-view', 'live')
+                          // In browser mode (no terminal), go to visualizations instead of live
+                          const isBrowserMode = !window.electronAPI?.terminal
+                          localStorage.setItem('localbase-selected-view', isBrowserMode ? 'visualizations' : 'live')
                           onWorkspaceSelected()
                         } catch (err) {
                           console.error('Failed to save project root:', err)

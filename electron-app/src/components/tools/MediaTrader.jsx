@@ -804,30 +804,62 @@ function MatrixView({ allVariables, lagMonths, getCorrelationColor }) {
 function SignalsView({ onBack, config, toolName }) {
   const [signals, setSignals] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState('all') // all, high, medium, low
   const [directionFilter, setDirectionFilter] = useState(null) // null, 'up', 'down'
   const [lastUpdated, setLastUpdated] = useState(null)
 
-  // Load signals data
-  useEffect(() => {
-    async function loadSignals() {
-      try {
-        const result = await window.electronAPI.api.readWorkspaceFile('projects/mediatrader-signals/signals-data.json')
+  // Check if we're in browser mode
+  const isBrowserMode = !window.electronAPI?.terminal
 
-        if (result.success) {
-          const data = JSON.parse(result.content)
-          setSignals(data.signals)
-          setLastUpdated(new Date(data.generated))
-        } else {
-          console.error('Error loading signals:', result.error)
-        }
-        setLoading(false)
-      } catch (error) {
-        console.error('Error loading signals:', error)
-        setLoading(false)
+  // Load signals data from file
+  async function loadSignals() {
+    try {
+      const result = await window.electronAPI.api.readWorkspaceFile('projects/mediatrader-signals/signals-data.json')
+
+      if (result.success) {
+        const data = JSON.parse(result.content)
+        setSignals(data.signals)
+        setLastUpdated(new Date(data.generated))
+      } else {
+        console.error('Error loading signals:', result.error)
       }
+      setLoading(false)
+    } catch (error) {
+      console.error('Error loading signals:', error)
+      setLoading(false)
     }
-    loadSignals()
+  }
+
+  // Refresh signals data (browser mode only - auto-runs query script)
+  async function refreshSignals() {
+    if (!isBrowserMode) return
+
+    setRefreshing(true)
+    try {
+      const res = await fetch('http://localhost:3000/api/signals/refresh', { method: 'POST' })
+      const result = await res.json()
+      if (result.success) {
+        // Reload the updated data
+        await loadSignals()
+      } else {
+        console.error('Error refreshing signals:', result.error)
+      }
+    } catch (error) {
+      console.error('Error refreshing signals:', error)
+    }
+    setRefreshing(false)
+  }
+
+  // Load signals on mount, auto-refresh in browser mode
+  useEffect(() => {
+    if (isBrowserMode) {
+      // Browser mode: refresh data first, then load
+      refreshSignals()
+    } else {
+      // Electron mode: just load existing data
+      loadSignals()
+    }
   }, [])
 
   // Filter signals
@@ -863,10 +895,12 @@ function SignalsView({ onBack, config, toolName }) {
     return Math.round(num).toLocaleString()
   }
 
-  if (loading) {
+  if (loading || refreshing) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-muted-foreground">Loading signals...</div>
+        <div className="text-muted-foreground">
+          {refreshing ? 'Refreshing signals data...' : 'Loading signals...'}
+        </div>
       </div>
     )
   }

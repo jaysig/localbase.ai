@@ -9,7 +9,7 @@ import express from 'express';
 import { join, dirname, basename, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import { VizRegistry } from '../viz/registry.js';
-import { unlinkSync, existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { unlinkSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import cors from 'cors';
 import { execSync } from 'child_process';
 import {
@@ -141,9 +141,8 @@ app.get('/api/media-correlation/roas', async (req, res) => {
   console.log(`📊 ROAS analysis request: ${startDate} to ${endDate} (lag: ${useLagBool})`);
 
   try {
-    // Import and run the analysis from project root (not using currentWorkspace for this specific path)
-    const projectRoot = join(__dirname, '..', '..');
-    const analysisPath = join(projectRoot, 'projects/lead-lag-indicator/analysis/run-roas-by-date-range.js');
+    // Import and run the analysis from current workspace
+    const analysisPath = join(currentWorkspace, 'projects/lead-lag-indicator/analysis/run-roas-by-date-range.js');
     const { runROASByDateRange } = await import(analysisPath);
     const results = runROASByDateRange(startDate, endDate, useLagBool);
 
@@ -658,6 +657,51 @@ app.get('/api/viz/:id', async (req, res) => {
 });
 
 /**
+ * POST /api/viz/:id/pin
+ * Toggle pin status for a visualization
+ */
+app.post('/api/viz/:id/pin', async (req, res) => {
+  const { id } = req.params;
+  const { pinned } = req.body;
+
+  try {
+    // Check both web-app and app directories for registry
+    const webAppRegistry = join(currentWorkspace, 'web-app', 'assets', 'visualizations.json');
+    const appRegistry = join(currentWorkspace, 'app', 'assets', 'visualizations.json');
+
+    let vizRegistryPath;
+    if (existsSync(webAppRegistry)) {
+      vizRegistryPath = webAppRegistry;
+    } else if (existsSync(appRegistry)) {
+      vizRegistryPath = appRegistry;
+    } else {
+      return res.json({ success: false, error: 'Visualization registry not found' });
+    }
+
+    const data = readFileSync(vizRegistryPath, 'utf-8');
+    const registry = JSON.parse(data);
+
+    // Find and update the visualization
+    const vizIndex = registry.visualizations?.findIndex(v => v.id === id);
+    if (vizIndex === -1 || vizIndex === undefined) {
+      return res.json({ success: false, error: `Visualization not found: ${id}` });
+    }
+
+    registry.visualizations[vizIndex].pinned = pinned;
+    writeFileSync(vizRegistryPath, JSON.stringify(registry, null, 2));
+
+    res.json({
+      success: true,
+      message: `Visualization ${pinned ? 'pinned' : 'unpinned'} successfully`,
+      viz: registry.visualizations[vizIndex]
+    });
+  } catch (error) {
+    console.error('Error toggling pin:', error);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+/**
  * GET /api/workspaces
  * List all available LocalBase workspaces
  */
@@ -1049,6 +1093,610 @@ app.get('/api/workspace/node-modules-breakdown', (req, res) => {
     });
   } catch (error) {
     console.error('Error analyzing framework:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/tools
+ * List tools/extensions from workspace (matches Electron main.js logic)
+ */
+app.get('/api/tools', (req, res) => {
+  try {
+    const tools = [];
+
+    // Scan both tools/ (framework) and extensions/ (instance-specific)
+    const dirsToScan = [
+      { path: join(currentWorkspace, 'tools'), label: 'tools' },
+      { path: join(currentWorkspace, 'extensions'), label: 'extensions' }
+    ];
+
+    for (const dir of dirsToScan) {
+      if (!existsSync(dir.path)) {
+        continue;
+      }
+
+      const entries = readdirSync(dir.path).filter(item => {
+        const itemPath = join(dir.path, item);
+        return statSync(itemPath).isDirectory() && !item.startsWith('.');
+      });
+
+      for (const entry of entries) {
+        const configPath = join(dir.path, entry, 'config.json');
+        if (existsSync(configPath)) {
+          try {
+            const config = JSON.parse(readFileSync(configPath, 'utf8'));
+            tools.push({
+              id: entry,
+              name: config.name || entry.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+              description: config.description || `${entry} tool`,
+              version: config.version || '1.0.0',
+              type: dir.label,
+              config
+            });
+          } catch (e) {
+            console.error(`Failed to parse config for ${entry}:`, e.message);
+          }
+        }
+      }
+    }
+
+    console.log(`🔧 Found ${tools.length} tools/extensions in ${currentWorkspace}`);
+    res.json({ success: true, tools, total: tools.length });
+  } catch (error) {
+    console.error('Error listing tools:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/tools/:toolId/config
+ * Get a specific tool's config
+ */
+app.get('/api/tools/:toolId/config', (req, res) => {
+  try {
+    const { toolId } = req.params;
+
+    // Check both tools/ and extensions/ directories
+    const dirsToCheck = [
+      join(currentWorkspace, 'tools', toolId, 'config.json'),
+      join(currentWorkspace, 'extensions', toolId, 'config.json')
+    ];
+
+    for (const configPath of dirsToCheck) {
+      if (existsSync(configPath)) {
+        const config = JSON.parse(readFileSync(configPath, 'utf8'));
+        return res.json({ success: true, config });
+      }
+    }
+
+    res.status(404).json({ success: false, error: `Tool config not found: ${toolId}` });
+  } catch (error) {
+    console.error('Error getting tool config:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/connectors
+ * List connectors from workspace with status and lastSync
+ */
+app.get('/api/connectors', (req, res) => {
+  try {
+    const connectors = [];
+    const connectorsDir = join(currentWorkspace, 'connectors');
+
+    if (existsSync(connectorsDir)) {
+      const connectorDirs = readdirSync(connectorsDir).filter(item => {
+        const itemPath = join(connectorsDir, item);
+        return statSync(itemPath).isDirectory() && !item.startsWith('.') && item !== 'example';
+      });
+
+      for (const dir of connectorDirs) {
+        const connectorPath = join(connectorsDir, dir);
+        const indexPath = join(connectorPath, 'index.js');
+
+        // Check for index.js
+        if (!existsSync(indexPath)) {
+          connectors.push({
+            id: dir,
+            name: dir.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+            status: 'missing-index',
+            description: 'Missing index.js - connector not functional',
+            lastSync: 'N/A',
+            path: connectorPath
+          });
+          continue;
+        }
+
+        // Look for data directory to determine lastSync
+        let lastSync = 'Never';
+        let dataDir = null;
+
+        // Try to find schema.json with data_location
+        const schemaPath = join(connectorPath, 'schema.json');
+        if (existsSync(schemaPath)) {
+          try {
+            const schemaData = readFileSync(schemaPath, 'utf-8');
+            const schema = JSON.parse(schemaData);
+            if (schema.data_location) {
+              // e.g., "data/g2-visits/file.csv" -> "data/g2-visits"
+              const locationParts = schema.data_location.split('/');
+              if (locationParts.length >= 2 && locationParts[0] === 'data') {
+                dataDir = join(currentWorkspace, locationParts[0], locationParts[1]);
+              }
+            }
+          } catch {
+            // Schema file exists but couldn't read it
+          }
+        }
+
+        // Fallback: name-based lookup - try multiple patterns
+        if (!dataDir) {
+          const possibleDirs = [
+            join(currentWorkspace, 'data', dir.replace(/-/g, '_')),  // g2-api -> g2_api
+            join(currentWorkspace, 'data', dir),                      // exact match
+            join(currentWorkspace, 'data', `${dir.replace(/-/g, '_')}_deals`),   // hubspot -> hubspot_deals
+            join(currentWorkspace, 'data', `${dir.replace(/-/g, '_')}_companies`), // hubspot -> hubspot_companies
+            join(currentWorkspace, 'data', `${dir.replace(/-api$/, '').replace(/-/g, '-')}-visits`), // g2-api -> g2-visits
+          ];
+
+          for (const possibleDir of possibleDirs) {
+            if (existsSync(possibleDir)) {
+              dataDir = possibleDir;
+              break;
+            }
+          }
+        }
+
+        // Check for recent data files
+        if (dataDir && existsSync(dataDir)) {
+          try {
+            const dirStat = statSync(dataDir);
+            if (dirStat.isDirectory()) {
+              const dataFiles = readdirSync(dataDir).filter(f => !f.startsWith('.'));
+              let mostRecentTime = 0;
+
+              for (const file of dataFiles) {
+                const filePath = join(dataDir, file);
+                try {
+                  const fileStat = statSync(filePath);
+                  if (fileStat.isFile() && fileStat.mtime.getTime() > mostRecentTime) {
+                    mostRecentTime = fileStat.mtime.getTime();
+                  }
+                } catch {
+                  // Skip files we can't stat
+                }
+              }
+
+              if (mostRecentTime > 0) {
+                lastSync = new Date(mostRecentTime).toISOString().split('T')[0];
+              }
+            }
+          } catch {
+            // No data directory or can't read it
+          }
+        }
+
+        // Get description from package.json or README
+        let description = '';
+        const pkgPath = join(connectorPath, 'package.json');
+        if (existsSync(pkgPath)) {
+          try {
+            const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+            description = pkg.description || '';
+          } catch {
+            // Ignore parse errors
+          }
+        }
+
+        connectors.push({
+          id: dir,
+          name: dir.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+          status: lastSync && lastSync !== 'Never' ? 'active' : 'needs-fix',
+          description,
+          lastSync,
+          path: connectorPath
+        });
+      }
+    }
+
+    res.json({ success: true, connectors, total: connectors.length });
+  } catch (error) {
+    console.error('Error listing connectors:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/datasources/:id/sync
+ * Run sync for a data source
+ */
+app.post('/api/datasources/:id/sync', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Load data-sources.json to find the sync script
+    const dataSourcesFile = join(currentWorkspace, 'data', 'data-sources.json');
+    if (!existsSync(dataSourcesFile)) {
+      return res.status(404).json({ success: false, error: 'data-sources.json not found' });
+    }
+
+    const dataSourcesContent = readFileSync(dataSourcesFile, 'utf-8');
+    const dataSourcesData = JSON.parse(dataSourcesContent);
+    const source = dataSourcesData.sources?.[id];
+
+    if (!source) {
+      return res.status(404).json({ success: false, error: `Data source '${id}' not found` });
+    }
+
+    if (!source.sync_script) {
+      return res.status(400).json({ success: false, error: `Data source '${id}' has no sync_script configured` });
+    }
+
+    // Run the sync script
+    const syncScript = join(currentWorkspace, source.sync_script);
+    if (!existsSync(syncScript)) {
+      return res.status(404).json({ success: false, error: `Sync script not found: ${source.sync_script}` });
+    }
+
+    console.log(`🔄 Running sync for ${id}: node ${syncScript}`);
+
+    const output = execSync(`node "${syncScript}"`, {
+      cwd: currentWorkspace,
+      encoding: 'utf-8',
+      timeout: 300000, // 5 minute timeout
+      env: { ...process.env }
+    });
+
+    console.log(`✅ Sync completed for ${id}`);
+    res.json({ success: true, output });
+  } catch (error) {
+    console.error('Sync error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      output: error.stdout || error.stderr || ''
+    });
+  }
+});
+
+/**
+ * POST /api/signals/refresh
+ * Regenerate the signals data by running query-signals.cjs
+ */
+app.post('/api/signals/refresh', async (req, res) => {
+  try {
+    const signalsScript = join(currentWorkspace, 'projects/mediatrader-signals/query-signals.cjs');
+
+    if (!existsSync(signalsScript)) {
+      return res.status(404).json({ success: false, error: 'Signals script not found' });
+    }
+
+    console.log(`🔄 Refreshing signals data...`);
+
+    const output = execSync(`node "${signalsScript}"`, {
+      cwd: currentWorkspace,
+      encoding: 'utf-8',
+      timeout: 120000, // 2 minute timeout
+      env: { ...process.env }
+    });
+
+    console.log(`✅ Signals refresh completed`);
+    res.json({ success: true, output });
+  } catch (error) {
+    console.error('Signals refresh error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      output: error.stdout || error.stderr || ''
+    });
+  }
+});
+
+/**
+ * GET /api/datasources
+ * List data sources from data/data-sources.json
+ */
+app.get('/api/datasources', (req, res) => {
+  try {
+    const dataSourcesFile = join(currentWorkspace, 'data', 'data-sources.json');
+
+    if (existsSync(dataSourcesFile)) {
+      const content = readFileSync(dataSourcesFile, 'utf-8');
+      const data = JSON.parse(content);
+      // Return sources object directly - matches what Overview.jsx expects
+      res.json({ success: true, sources: data.sources || {} });
+    } else {
+      // Fallback: scan for .db files if no data-sources.json exists
+      const dataSources = [];
+      const dataDir = join(currentWorkspace, 'data');
+
+      if (existsSync(dataDir)) {
+        const findDbs = (dir, prefix = '') => {
+          const items = readdirSync(dir);
+          for (const item of items) {
+            const itemPath = join(dir, item);
+            const stat = statSync(itemPath);
+            if (stat.isDirectory()) {
+              findDbs(itemPath, prefix ? `${prefix}/${item}` : item);
+            } else if (item.endsWith('.db')) {
+              dataSources.push({
+                id: prefix ? `${prefix}/${item}` : item,
+                name: item.replace('.db', ''),
+                path: itemPath,
+                size: stat.size,
+                modified: stat.mtime
+              });
+            }
+          }
+        };
+        findDbs(dataDir);
+      }
+
+      // Convert array to sources object for consistency
+      const sources = {};
+      dataSources.forEach(ds => {
+        sources[ds.id] = { name: ds.name, path: ds.path };
+      });
+      res.json({ success: true, sources });
+    }
+  } catch (error) {
+    console.error('Error listing data sources:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/workspace/file
+ * Read a file from the workspace
+ * ?path=relative/path/to/file.json
+ */
+app.get('/api/workspace/file', (req, res) => {
+  try {
+    const { path: relativePath } = req.query;
+
+    if (!relativePath) {
+      return res.status(400).json({
+        success: false,
+        error: 'path query parameter required'
+      });
+    }
+
+    const filePath = join(currentWorkspace, relativePath);
+
+    if (!existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        error: `File not found: ${relativePath}`
+      });
+    }
+
+    const content = readFileSync(filePath, 'utf8');
+    res.json({ success: true, content });
+  } catch (error) {
+    console.error('Error reading workspace file:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/db/query
+ * Execute SQL query against a workspace database
+ * Body: { database: "path/to/db.sqlite", sql: "SELECT ...", params: [] }
+ */
+app.post('/api/db/query', (req, res) => {
+  try {
+    const { database, sql, params = [] } = req.body;
+
+    if (!database || !sql) {
+      return res.status(400).json({
+        success: false,
+        error: 'database and sql are required'
+      });
+    }
+
+    // Resolve database path relative to workspace
+    const dbPath = join(currentWorkspace, database);
+
+    if (!existsSync(dbPath)) {
+      return res.status(404).json({
+        success: false,
+        error: `Database not found: ${database}`
+      });
+    }
+
+    const db = new Database(dbPath, { readonly: true });
+
+    try {
+      // Determine if this is a SELECT or other query
+      const isSelect = sql.trim().toUpperCase().startsWith('SELECT');
+
+      let result;
+      if (isSelect) {
+        const stmt = db.prepare(sql);
+        result = stmt.all(...params);
+      } else {
+        const stmt = db.prepare(sql);
+        result = stmt.run(...params);
+      }
+
+      db.close();
+
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (queryError) {
+      db.close();
+      throw queryError;
+    }
+  } catch (error) {
+    console.error('Database query error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/mediatrader/query
+ * Query MediaTrader data source using config-driven system
+ * Body: { sourceId: "google-ads", options: { aggregation: 'sum' } }
+ */
+app.post('/api/mediatrader/query', (req, res) => {
+  try {
+    const { sourceId, options = {} } = req.body;
+
+    if (!sourceId) {
+      return res.status(400).json({
+        success: false,
+        error: 'sourceId is required'
+      });
+    }
+
+    // Load MediaTrader config from workspace
+    const configPaths = [
+      join(currentWorkspace, 'extensions/mediatrader/config.json'),
+      join(currentWorkspace, 'tools/mediatrader/config.json')
+    ];
+
+    let config = null;
+    for (const configPath of configPaths) {
+      if (existsSync(configPath)) {
+        try {
+          const configData = readFileSync(configPath, 'utf-8');
+          config = JSON.parse(configData);
+          break;
+        } catch (err) {
+          console.error('❌ Error parsing MediaTrader config:', err);
+        }
+      }
+    }
+
+    if (!config) {
+      console.warn('⚠️ MediaTrader config not found');
+      return res.json([]);
+    }
+
+    // Find source in channels or conversionSources
+    const source = [...(config.channels || []), ...(config.conversionSources || [])].find(s => s.id === sourceId);
+
+    if (!source) {
+      console.warn(`⚠️ Source "${sourceId}" not found in config`);
+      return res.json([]);
+    }
+
+    if (!source.enabled) {
+      console.warn(`⚠️ Source "${sourceId}" is disabled`);
+      return res.json([]);
+    }
+
+    // Handle CSV data sources
+    if (source.dataSource.endsWith('.csv')) {
+      const { startDate = '2024-01-01', endDate = '2025-12-31' } = options;
+      const csvPath = join(currentWorkspace, source.dataSource);
+
+      if (!existsSync(csvPath)) {
+        console.warn(`⚠️ CSV file not found: ${csvPath}`);
+        return res.json([]);
+      }
+
+      const csvData = readFileSync(csvPath, 'utf-8');
+      const lines = csvData.trim().split('\n').slice(1);
+      const results = lines
+        .map(line => {
+          const [month, value] = line.split(',');
+          return { month, value: parseInt(value, 10) };
+        })
+        .filter(row => {
+          const monthDate = row.month.includes('-') ? `${row.month}-01` : row.month;
+          return monthDate >= startDate && monthDate <= endDate;
+        });
+
+      console.log(`✅ MediaTrader: Got ${results.length} rows for "${sourceId}" (CSV)`);
+      return res.json(results);
+    }
+
+    // Handle SQLite data sources
+    if (source.dataSource.endsWith('.sqlite') || source.dataSource.endsWith('.db')) {
+      const { startDate = '2022-01-01', endDate = '2025-12-31', aggregation = 'count' } = options;
+      const dbPath = join(currentWorkspace, source.dataSource);
+
+      if (!existsSync(dbPath)) {
+        console.warn(`⚠️ Database not found: ${dbPath}`);
+        return res.json([]);
+      }
+
+      const db = new Database(dbPath, { readonly: true });
+
+      // Determine what to aggregate
+      let aggregateSQL = 'COUNT(*) as count';
+      if (aggregation === 'sum' && source.costField) {
+        aggregateSQL = `SUM([${source.costField}]) as spend`;
+      } else if ((aggregation === 'sum' || aggregation === 'count') && source.valueField) {
+        aggregateSQL = `SUM([${source.valueField}]) as value`;
+      }
+
+      // Handle different date formats
+      let monthExpression;
+      let dateFieldExpression = `[${source.dateField}]`;
+
+      if (source.dateFormat === 'month') {
+        monthExpression = `[${source.dateField}]`;
+      } else if (source.dateFormat === 'unixepoch') {
+        dateFieldExpression = `datetime(CASE WHEN [${source.dateField}] > 1000000000000 THEN [${source.dateField}]/1000 ELSE [${source.dateField}] END, 'unixepoch')`;
+        monthExpression = `strftime('%Y-%m', datetime(CASE WHEN [${source.dateField}] > 1000000000000 THEN [${source.dateField}]/1000 ELSE [${source.dateField}] END, 'unixepoch'))`;
+      } else {
+        monthExpression = `strftime('%Y-%m', [${source.dateField}])`;
+      }
+
+      // Build WHERE clause
+      let whereClause = `WHERE ${dateFieldExpression} IS NOT NULL
+          AND ${dateFieldExpression} >= ?
+          AND ${dateFieldExpression} <= ?`;
+
+      if (source.filterField && source.filterValue) {
+        whereClause += `\n      AND [${source.filterField}] = '${source.filterValue}'`;
+      }
+
+      if (source.whereClause) {
+        whereClause += `\n      AND ${source.whereClause}`;
+      }
+
+      const query = `
+        SELECT
+          ${monthExpression} as month,
+          ${aggregateSQL}
+        FROM ${source.table}
+        ${whereClause}
+        GROUP BY month
+        ORDER BY month
+      `;
+
+      try {
+        const results = db.prepare(query).all(startDate, endDate);
+        db.close();
+        console.log(`✅ MediaTrader: Got ${results.length} rows for "${sourceId}" (SQLite)`);
+        return res.json(results);
+      } catch (queryErr) {
+        db.close();
+        console.error(`❌ Query error for "${sourceId}":`, queryErr.message);
+        return res.json([]);
+      }
+    }
+
+    console.warn(`⚠️ Unknown data source type: ${source.dataSource}`);
+    res.json([]);
+  } catch (error) {
+    console.error(`❌ Error querying MediaTrader source:`, error);
     res.status(500).json({
       success: false,
       error: error.message

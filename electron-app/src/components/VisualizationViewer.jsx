@@ -4,6 +4,17 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import CallMetricsChart from '@/components/charts/CallMetricsChart'
 
+// Helper to build viz URLs - uses HTTP in browser mode, localbase:// in Electron
+const buildVizUrl = (vizPath) => {
+  const isBrowserMode = !window.electronAPI?.terminal
+  const path = vizPath.replace(/^\//, '')
+  const timestamp = Date.now()
+  if (isBrowserMode) {
+    return `http://localhost:3000/${path}?t=${timestamp}`
+  }
+  return `localbase://${path}?t=${timestamp}`
+}
+
 export default function VisualizationViewer() {
   const [visualizations, setVisualizations] = useState([])
   const [selectedViz, setSelectedViz] = useState(null)
@@ -162,7 +173,7 @@ export default function VisualizationViewer() {
   useEffect(() => {
     if (selectedViz) {
       // Only update URL when selectedViz ID changes or iframeKey changes (manual refresh)
-      const url = `localbase://${selectedViz.url.replace(/^\//, '')}?t=${Date.now()}`
+      const url = buildVizUrl(selectedViz.url)
       console.log('🔄 VisualizationViewer: Setting iframe URL:', { id: selectedViz.id, iframeKey })
       setIframeUrl(url)
     }
@@ -344,7 +355,7 @@ export default function VisualizationViewer() {
                 id: viz.id,
                 title: viz.title,
                 filename: viz.filename,
-                url: `localbase://viz/${viz.filename}?t=${Date.now()}`
+                url: buildVizUrl(`viz/${viz.filename}`)
               }
 
               // Save to localStorage (for when LiveWorkspace isn't mounted yet)
@@ -427,7 +438,7 @@ export default function VisualizationViewer() {
                 id: viz.id,
                 title: viz.title,
                 filename: viz.filename,
-                url: `localbase://viz/${viz.filename}?t=${Date.now()}`
+                url: buildVizUrl(`viz/${viz.filename}`)
               }
 
               // Save to localStorage (for when LiveWorkspace isn't mounted yet)
@@ -506,7 +517,7 @@ export default function VisualizationViewer() {
                   id: viz.id,
                   title: viz.title,
                   filename: viz.filename,
-                  url: `localbase://viz/${viz.filename}?t=${Date.now()}`
+                  url: buildVizUrl(`viz/${viz.filename}`)
                 }
 
                 // Save to localStorage (for when LiveWorkspace isn't mounted yet)
