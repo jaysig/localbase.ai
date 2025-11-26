@@ -47,6 +47,31 @@ if [ -d "$FRAMEWORK_DIR/scripts" ]; then
     $FRAMEWORK_DIR/scripts/ $INSTANCE_DIR/scripts/
 fi
 
+# Sync connector base classes (NOT business connectors)
+echo "🔌 Syncing connector base classes..."
+cp $FRAMEWORK_DIR/connectors/MCPConnector.js $INSTANCE_DIR/connectors/ 2>/dev/null || true
+cp $FRAMEWORK_DIR/connectors/APIClient.js $INSTANCE_DIR/connectors/ 2>/dev/null || true
+
+# Migrate old import paths in instance connectors
+echo "🔄 Migrating connector imports..."
+# Fix old ../base.js imports -> ../MCPConnector.js
+find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \
+  sed -i '' "s|from '../base.js'|from '../MCPConnector.js'|g" {} \; 2>/dev/null || true
+find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \
+  sed -i '' "s|from \"../base.js\"|from \"../MCPConnector.js\"|g" {} \; 2>/dev/null || true
+
+# Fix old ../../tools/connectors/BaseConnector.js imports -> ../APIClient.js
+find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \
+  sed -i '' "s|from '../../tools/connectors/BaseConnector.js'|from '../APIClient.js'|g" {} \; 2>/dev/null || true
+find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \
+  sed -i '' "s|from \"../../tools/connectors/BaseConnector.js\"|from \"../APIClient.js\"|g" {} \; 2>/dev/null || true
+
+# Clean up old tools/connectors directory if it exists
+if [ -d "$INSTANCE_DIR/tools/connectors" ]; then
+  echo "🧹 Removing old tools/connectors directory..."
+  rm -rf $INSTANCE_DIR/tools/connectors
+fi
+
 echo ""
 echo "✅ Framework sync complete!"
 echo ""
@@ -55,7 +80,7 @@ echo "   cd electron-app && npm install"
 echo ""
 echo "🚨 INSTANCE-SPECIFIC FILES (NEVER sync these from framework):"
 echo "   - CLAUDE.md (instance-specific context and connectors)"
-echo "   - connectors/ (business-specific data connectors)"
+echo "   - connectors/*/ (business-specific data connectors - base classes ARE synced)"
 echo "   - extensions/ (business-specific tools like CRM, MediaTrader)"
 echo "   - data/ (business-specific databases)"
 echo "   - env.local (instance-specific credentials)"

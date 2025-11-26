@@ -50,9 +50,9 @@
    - Charts now render properly in embedded views
    - Location: `electron-app/electron/main.js`
 
-4. ✅ **BaseConnector Framework** - Restored full connector base class
-   - 272 lines with HTTP methods, auth, rate limiting
-   - Location: `tools/connectors/BaseConnector.js`
+4. ✅ **Connector Base Classes** - Two base classes for different purposes
+   - `connectors/MCPConnector.js` - MCP tool interface (getTools, handleTool)
+   - `connectors/APIClient.js` - HTTP client with auth, rate limiting, pagination
 
 **Environment & Credentials:**
 1. ✅ All sync scripts now properly load credentials from `env.local`
@@ -119,7 +119,7 @@ LocalBase.ai is the **core framework**. Renu and GoSkills are **instances** (sep
 - `tools/` - Framework libraries (viz, mcp, server, ocr, surge)
 - `web-app/` - Web dashboard UI
 - `electron-app/` - Desktop app
-- `connectors/base.js` and `connectors/example/` - Connector framework
+- `connectors/MCPConnector.js`, `connectors/APIClient.js`, and `connectors/example/` - Connector framework
 
 ### Feature Branch Workflow
 
@@ -257,11 +257,20 @@ Each connector provides MCP tools for Claude Code integration and stores data in
    - Use the VizFactory for complex dashboards, but simple charts may require direct HTML approach
 
 ## Connector Framework
-12. **BaseConnector Pattern** (ALL connectors must follow)
-   - **Extends BaseConnector**: `import { BaseConnector } from '../base.js'`
-   - **Constructor**: Call `super(connectorName)` to initialize
+12. **Two Base Classes** (use the right one for your connector)
+
+   **MCPConnector** (`connectors/MCPConnector.js`) - For exposing tools to Claude:
+   - `import { BaseConnector } from '../MCPConnector.js'`
    - **Required Methods**: `getTools()`, `canHandleTool()`, `handleTool()`
    - **Error Handling**: Use `this.formatError(error)` and `this.formatResponse(data)`
+   - **Use case**: Connectors that query local SQLite and expose MCP tools
+
+   **APIClient** (`connectors/APIClient.js`) - For fetching from external APIs:
+   - `import { BaseConnector } from '../APIClient.js'`
+   - **Features**: Auth handling, rate limiting, retry logic, pagination
+   - **Use case**: HTTP clients that pull data from HubSpot, Mixpanel, etc.
+
+   **Common patterns for both:**
    - **Database**: Use `better-sqlite3` for all SQLite operations
    - **Environment**: Load config from `env.local` using dotenv
    - **MCP Integration**: Tools auto-register with MCP server for Claude Code
