@@ -49,16 +49,21 @@ fi
 
 # Sync connector base classes (NOT business connectors)
 echo "🔌 Syncing connector base classes..."
-cp $FRAMEWORK_DIR/connectors/MCPConnector.js $INSTANCE_DIR/connectors/ 2>/dev/null || true
+cp $FRAMEWORK_DIR/connectors/MCPAdapter.js $INSTANCE_DIR/connectors/ 2>/dev/null || true
 cp $FRAMEWORK_DIR/connectors/APIClient.js $INSTANCE_DIR/connectors/ 2>/dev/null || true
 
 # Migrate old import paths in instance connectors
 echo "🔄 Migrating connector imports..."
-# Fix old ../base.js imports -> ../MCPConnector.js
+# Fix old ../base.js imports -> ../MCPAdapter.js
 find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \
-  sed -i '' "s|from '../base.js'|from '../MCPConnector.js'|g" {} \; 2>/dev/null || true
+  sed -i '' "s|from '../base.js'|from '../MCPAdapter.js'|g" {} \; 2>/dev/null || true
 find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \
-  sed -i '' "s|from \"../base.js\"|from \"../MCPConnector.js\"|g" {} \; 2>/dev/null || true
+  sed -i '' "s|from \"../base.js\"|from \"../MCPAdapter.js\"|g" {} \; 2>/dev/null || true
+# Fix old ../MCPConnector.js imports -> ../MCPAdapter.js
+find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \
+  sed -i '' "s|from '../MCPConnector.js'|from '../MCPAdapter.js'|g" {} \; 2>/dev/null || true
+find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \
+  sed -i '' "s|from \"../MCPConnector.js\"|from \"../MCPAdapter.js\"|g" {} \; 2>/dev/null || true
 
 # Fix old ../../tools/connectors/BaseConnector.js imports -> ../APIClient.js
 find $INSTANCE_DIR/connectors -name "*.js" -type f -exec \

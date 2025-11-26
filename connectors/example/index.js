@@ -1,4 +1,4 @@
-import { BaseConnector } from '../MCPConnector.js';
+import { BaseConnector } from '../MCPAdapter.js';
 import Database from 'better-sqlite3';
 import path from 'path';
 import dotenv from 'dotenv';

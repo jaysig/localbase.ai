@@ -51,7 +51,7 @@
    - Location: `electron-app/electron/main.js`
 
 4. ✅ **Connector Base Classes** - Two base classes for different purposes
-   - `connectors/MCPConnector.js` - MCP tool interface (getTools, handleTool)
+   - `connectors/MCPAdapter.js` - MCP tool interface (getTools, handleTool)
    - `connectors/APIClient.js` - HTTP client with auth, rate limiting, pagination
 
 **Environment & Credentials:**
@@ -119,7 +119,7 @@ LocalBase.ai is the **core framework**. Renu and GoSkills are **instances** (sep
 - `tools/` - Framework libraries (viz, mcp, server, ocr, surge)
 - `web-app/` - Web dashboard UI
 - `electron-app/` - Desktop app
-- `connectors/MCPConnector.js`, `connectors/APIClient.js`, and `connectors/example/` - Connector framework
+- `connectors/MCPAdapter.js`, `connectors/APIClient.js`, and `connectors/example/` - Connector framework
 
 ### Feature Branch Workflow
 
@@ -259,8 +259,8 @@ Each connector provides MCP tools for Claude Code integration and stores data in
 ## Connector Framework
 12. **Two Base Classes** (use the right one for your connector)
 
-   **MCPConnector** (`connectors/MCPConnector.js`) - For exposing tools to Claude:
-   - `import { BaseConnector } from '../MCPConnector.js'`
+   **MCPAdapter** (`connectors/MCPAdapter.js`) - For exposing tools to Claude:
+   - `import { BaseConnector } from '../MCPAdapter.js'`
    - **Required Methods**: `getTools()`, `canHandleTool()`, `handleTool()`
    - **Error Handling**: Use `this.formatError(error)` and `this.formatResponse(data)`
    - **Use case**: Connectors that query local SQLite and expose MCP tools
