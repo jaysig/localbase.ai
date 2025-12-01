@@ -1,0 +1,14 @@
+{
+  "name": "Example Extension",
+  "description": "Template extension showing the extension pattern",
+  "version": "1.0.0",
+  "presentation": "sidebar",
+  "routes": [
+    {
+      "id": "dashboard",
+      "label": "Dashboard",
+      "icon": "LayoutDashboard",
+      "component": "Dashboard.jsx"
+    }
+  ]
+}
