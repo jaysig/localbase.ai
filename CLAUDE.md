@@ -341,8 +341,41 @@ Each connector provides MCP tools for Claude Code integration and stores data in
    - **Use Simple Chart**: Custom filters, business-specific styling, pipeline analysis
    - **Hybrid Approach**: VizFactory for initial generation, manual refinement for customization
 
+## Date Picker Standard
+20. **Date Range Filters** - Standard pattern for all visualizations with date filtering
+   - **ALWAYS use `type="date"`** - Never use `type="month"` or custom date pickers
+   - **Format**: Displays as MM/DD/YYYY (e.g., "1/1/25 - 11/25/25")
+   - **Value format**: Returns YYYY-MM-DD string (e.g., "2025-01-01")
+   - **Month comparison**: Extract YYYY-MM with `.substring(0, 7)` for monthly data
+   - **Timezone fix**: Always append `T12:00:00` when creating Date objects to avoid off-by-one-day errors
+   - **Reference**: `web-app/viz/hubspot-companies-timeline.html` for complete implementation
+   - **Template**: `tools/templates/multiline-chart-template.html` already follows this pattern
+
+   **HTML Pattern:**
+   ```html
+   <input type="date" id="start-date" value="2024-01-01">
+   <input type="date" id="end-date" value="2025-11-30">
+   ```
+
+   **Filter Logic Pattern:**
+   ```javascript
+   // Extract YYYY-MM for month-level comparison
+   const startMonth = document.getElementById('start-date').value.substring(0, 7);
+   const endMonth = document.getElementById('end-date').value.substring(0, 7);
+   const filtered = data.filter(item => {
+     const itemMonth = item.date.substring(0, 7);
+     return itemMonth >= startMonth && itemMonth <= endMonth;
+   });
+   ```
+
+   **Date Display Pattern (timezone-safe):**
+   ```javascript
+   const date = new Date(dateString + 'T12:00:00'); // Prevents timezone issues
+   const display = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+   ```
+
 ## Venn Diagram Creation Process
-20. **Chart.js Venn Diagrams** - Complete step-by-step process for creating working Venn diagrams
+21. **Chart.js Venn Diagrams** - Complete step-by-step process for creating working Venn diagrams
 
    **Prerequisites:**
    - Install chartjs-chart-venn package: `npm install chartjs-chart-venn`

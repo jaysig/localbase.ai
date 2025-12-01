@@ -7,11 +7,9 @@ import {
   Settings,
   Menu,
   Bot,
-  Terminal as TerminalIcon,
   LineChart,
   Home as HomeIcon,
   FolderOpen,
-  Layout,
   DollarSign,
   Users,
   TrendingUp,
@@ -20,11 +18,14 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Home from '@/components/Home'
-import Terminal from '@/components/Terminal'
 import Overview from '@/components/Overview'
 import VisualizationViewer from '@/components/VisualizationViewer'
-import LiveWorkspace from '@/components/LiveWorkspace'
+import ChatWorkspace from '@/components/ChatWorkspace'
 import { useVimiumShortcuts } from '@/hooks/useVimiumShortcuts'
+import { MessageSquare } from 'lucide-react'
+
+// Browser-only mode (no Electron)
+const isBrowserMode = true
 
 // Static imports for tool components (avoiding Vite dynamic import issues)
 import MediaTrader from '@/components/tools/MediaTrader'
@@ -54,7 +55,10 @@ function App() {
   useVimiumShortcuts()
 
   const [currentWorkspace, setCurrentWorkspace] = useState('')
-  const [selectedView, setSelectedView] = useState('home')
+  // Default to chat view, but restore from localStorage if available
+  const [selectedView, setSelectedView] = useState(() => {
+    return localStorage.getItem('localbase-selected-view') || 'chat'
+  })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('localbase-sidebar-collapsed') === 'true'
   })
@@ -77,6 +81,34 @@ function App() {
     window.addEventListener('app:switchTab', handler)
     return () => window.removeEventListener('app:switchTab', handler)
   }, [])
+
+  // Browser history management - prevent back button from exiting app
+  useEffect(() => {
+    // Push initial state on mount
+    if (!window.history.state?.view) {
+      window.history.replaceState({ view: selectedView }, '', window.location.pathname)
+    }
+
+    const handlePopState = (e) => {
+      if (e.state?.view) {
+        setSelectedView(e.state.view)
+      } else {
+        // No previous state - stay on current view (don't exit)
+        window.history.pushState({ view: selectedView }, '', window.location.pathname)
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [selectedView])
+
+  // Push to history when view changes (for back button navigation)
+  useEffect(() => {
+    // Only push if the current state is different
+    if (window.history.state?.view !== selectedView) {
+      window.history.pushState({ view: selectedView }, '', window.location.pathname)
+    }
+  }, [selectedView])
 
   // Load current workspace name
   const loadWorkspace = async () => {
@@ -157,6 +189,11 @@ function App() {
     localStorage.setItem('localbase-sidebar-collapsed', sidebarCollapsed)
   }, [sidebarCollapsed])
 
+  // Persist selected view to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('localbase-selected-view', selectedView)
+  }, [selectedView])
+
   // Global keyboard handlers
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -172,10 +209,7 @@ function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
         e.preventDefault()
 
-        if (selectedView === 'live') {
-          console.log('🔄 App: Command+R on Live Workspace - dispatching refresh event')
-          window.dispatchEvent(new CustomEvent('liveWorkspace:refresh'))
-        } else if (selectedView === 'visualizations') {
+        if (selectedView === 'visualizations') {
           console.log('🔄 App: Command+R on Visualizations - dispatching refresh event')
           window.dispatchEvent(new CustomEvent('visualizations:refresh'))
         } else {
@@ -237,6 +271,8 @@ function App() {
   // Note: Live Workspace hidden in browser mode (no terminal support)
   const coreNavItems = [
     // { id: 'live', label: 'Live Workspace', icon: Layout },
+    // Chat only in browser mode (replaces Terminal/Claude CLI workflow)
+    ...(isBrowserMode ? [{ id: 'chat', label: 'Chat', icon: MessageSquare }] : []),
     { id: 'visualizations', label: 'Visualizations', icon: LineChart },
   ]
 
@@ -257,23 +293,9 @@ function App() {
           <Bot className="h-5 w-5 text-green-400" />
           <span className="text-sm font-mono text-muted-foreground">LocalBase</span>
         </div>
-        <div className="flex items-center gap-2">
-          {forceSingleWorkspace ? (
-            <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-              <FolderOpen className="h-4 w-4" />
-              <span>{currentWorkspace || 'workspace'}</span>
-            </div>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSwitchWorkspace}
-              className="text-xs font-mono"
-            >
-              <FolderOpen className="h-4 w-4 mr-2" />
-              {currentWorkspace || 'workspace'}
-            </Button>
-          )}
+        <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+          <FolderOpen className="h-4 w-4" />
+          <span>{currentWorkspace || 'workspace'}</span>
         </div>
       </div>
 
@@ -355,17 +377,16 @@ function App() {
             <Home
               onWorkspaceSelected={() => {
                 loadWorkspace()
-                // In browser mode (no terminal), go to visualizations instead of live
-                const isBrowserMode = !window.electronAPI?.terminal
-                setSelectedView(isBrowserMode ? 'visualizations' : 'live')
+                // In browser mode (no terminal), go to chat instead of live
+                setSelectedView(isBrowserMode ? 'chat' : 'live')
               }}
             />
           ) : selectedView === 'visualizations' ? (
             <VisualizationViewer key={vizKey} />
-          ) : selectedView === 'live' ? (
-            <LiveWorkspace />
           ) : selectedView === 'settings' ? (
             <Overview onNavigateHome={() => setSelectedView('home')} />
+          ) : selectedView === 'chat' ? (
+            <ChatWorkspace />
           ) : (() => {
             // Check if this is a tool view
             const ToolComponent = toolComponentMap[selectedView]

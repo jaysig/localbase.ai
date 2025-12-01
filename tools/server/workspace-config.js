@@ -14,7 +14,7 @@ const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 /**
  * Detect available LocalBase workspaces
- * Scans ~/Work for directories containing app/assets/visualizations.json or web-app/assets/visualizations.json
+ * Scans ~/Work for directories containing viz/visualizations.json
  * Also checks for my-workspace in the framework directory
  */
 export function detectWorkspaces() {
@@ -31,7 +31,7 @@ export function detectWorkspaces() {
       if (!statSync(fullPath).isDirectory()) continue;
 
       // Check for my-workspace in framework (highest priority)
-      const myWorkspacePath = join(fullPath, 'my-workspace', 'web-app', 'assets', 'visualizations.json');
+      const myWorkspacePath = join(fullPath, 'my-workspace', 'viz', 'visualizations.json');
 
       if (existsSync(myWorkspacePath)) {
         // Framework with my-workspace - add my-workspace only, skip the parent
@@ -43,12 +43,10 @@ export function detectWorkspaces() {
         continue;
       }
 
-      // Check for web-app/assets/visualizations.json (new pattern)
-      const webAppVizPath = join(fullPath, 'web-app', 'assets', 'visualizations.json');
-      // Check for app/assets/visualizations.json (legacy pattern)
-      const appVizPath = join(fullPath, 'app', 'assets', 'visualizations.json');
+      // Check for viz/visualizations.json (current pattern)
+      const vizPath = join(fullPath, 'viz', 'visualizations.json');
 
-      if (existsSync(webAppVizPath) || existsSync(appVizPath)) {
+      if (existsSync(vizPath)) {
         workspaces.push({
           name: entry,
           path: fullPath

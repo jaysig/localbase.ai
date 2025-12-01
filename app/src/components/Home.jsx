@@ -309,6 +309,8 @@ export default function Home({ onWorkspaceSelected }) {
                     {availableProjects.map((project) => (
                     <Card
                       key={project.path}
+                      role="button"
+                      tabIndex={0}
                       className="cursor-pointer transition-all hover:scale-[1.02] border-border hover:border-green-400/50"
                       onClick={async () => {
                         // Auto-open workspace on click

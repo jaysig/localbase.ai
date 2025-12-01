@@ -71,10 +71,25 @@ export default function VisualizationViewer() {
     return () => window.removeEventListener('visualizations:refresh', handleRefresh)
   }, [])
 
-  // Command+L keyboard shortcut to focus search, Escape to clear and blur
+  // Listen for viz:select event from ChatWorkspace
+  useEffect(() => {
+    const handleVizSelect = (e) => {
+      const vizId = e.detail
+      console.log('🔍 VisualizationViewer: Received viz:select event for:', vizId)
+      const viz = visualizations.find(v => v.id === vizId)
+      if (viz) {
+        setSelectedViz(viz)
+      }
+    }
+
+    window.addEventListener('viz:select', handleVizSelect)
+    return () => window.removeEventListener('viz:select', handleVizSelect)
+  }, [visualizations])
+
+  // Command+K keyboard shortcut to focus search, Escape to clear and blur
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         searchInputRef.current?.focus()
       } else if (e.key === 'Escape') {
@@ -290,7 +305,7 @@ export default function VisualizationViewer() {
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Search visualizations by title, filename, or ID... (⌘L)"
+          placeholder="Search visualizations by title, filename, or ID... (⌘K)"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:border-green-400 focus:outline-none transition-colors"
@@ -504,8 +519,16 @@ export default function VisualizationViewer() {
 
       {/* List View */}
       {viewMode === 'list' && (
-        <div className="space-y-2">
-          {filteredVisualizations.map((viz) => (
+        <>
+          {/* Pinned Section */}
+          {pinnedViz.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-yellow-400 mb-3 flex items-center gap-2">
+                <Star className="h-4 w-4 fill-yellow-400" />
+                Pinned ({pinnedViz.length})
+              </h3>
+              <div className="space-y-2">
+                {pinnedViz.map((viz) => (
             <Card
               key={viz.id}
               className="group cursor-pointer transition-all hover:border-green-400/50"
@@ -549,6 +572,14 @@ export default function VisualizationViewer() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className={`h-8 w-8 transition-opacity flex-shrink-0 ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                  onClick={(e) => handlePin(e, viz)}
+                >
+                  <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0"
                   onClick={(e) => handleDelete(e, viz)}
                   disabled={deletingId === viz.id}
@@ -557,8 +588,73 @@ export default function VisualizationViewer() {
                 </Button>
               </div>
             </Card>
-          ))}
-        </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* All/Unpinned Section */}
+          {unpinnedViz.length > 0 && (
+            <div>
+              {pinnedViz.length > 0 && (
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                  All Visualizations ({unpinnedViz.length})
+                </h3>
+              )}
+              <div className="space-y-2">
+                {unpinnedViz.map((viz) => (
+                  <Card
+                    key={viz.id}
+                    className="group cursor-pointer transition-all hover:border-green-400/50"
+                    onClick={() => {
+                      const vizData = {
+                        id: viz.id,
+                        title: viz.title,
+                        filename: viz.filename,
+                        url: buildVizUrl(`viz/${viz.filename}`)
+                      }
+                      localStorage.setItem('liveWorkspace_lastSession', JSON.stringify(vizData))
+                      window.dispatchEvent(new CustomEvent('liveWorkspace:loadViz', { detail: viz }))
+                      setSelectedViz(viz)
+                    }}
+                  >
+                    <div className="flex items-center gap-4 p-4">
+                      <BarChart3 className="h-5 w-5 text-green-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold truncate">{viz.title}</h3>
+                        <p className="text-xs text-muted-foreground">
+                          {viz.description || `Created ${formatDate(viz.createdAt)}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="capitalize">{viz.type}</span>
+                        <span>{viz.library}</span>
+                        <span>{formatDate(viz.createdAt)}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-8 w-8 transition-opacity flex-shrink-0 ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                        onClick={(e) => handlePin(e, viz)}
+                      >
+                        <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0"
+                        onClick={(e) => handleDelete(e, viz)}
+                        disabled={deletingId === viz.id}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {visualizations.length === 0 && (

@@ -5,16 +5,19 @@
   "type": "module",
   "scripts": {
     "start": "node tools/server/app-server.js",
+    "dev": "concurrently \"npm start\" \"cd app && npm run dev\"",
+    "build": "cd app && npm run build",
     "web": "npm start & sleep 2 && open http://localhost:3000",
     "mcp": "node tools/mcp/server.js",
     "all": "npm run mcp & npm start",
-    "dev": "node --watch tools/server/app-server.js",
+    "server:watch": "node --watch tools/server/app-server.js",
     "update-g2": "node connectors/g2-api/update.js",
     "update-deals": "node connectors/hubspot/update.js",
     "test": "node --test test/**/*.test.js",
     "test:watch": "node --test --watch test/**/*.test.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
     "@modelcontextprotocol/sdk": "^1.17.5",
     "@observablehq/plot": "^0.6.17",
     "axios": "^1.6.0",

@@ -20,6 +20,7 @@ import {
 } from './workspace-config.js';
 // import { CompanyCamConnector } from '../../connectors/companycam/index.js'; // REMOVED
 import Database from 'better-sqlite3';
+import { handleChat } from './chat-handler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,20 +32,17 @@ const PORT = 3000;
 let currentWorkspace = getCurrentWorkspace();
 
 // Detect if running from framework (localbase.ai) vs instance
-// Check if process.cwd() matches the directory containing this script
 const cwd = process.cwd();
-const scriptDir = dirname(__dirname); // tools/server -> up 2 levels from __dirname
-const isFrameworkMode = cwd === scriptDir;
+const frameworkRoot = join(dirname(__dirname), '..'); // tools/server -> tools -> root
 
-// Detect app directory (web-app/ for newer instances, app/ for older ones)
-function getAppDir(workspace) {
-  const webAppDir = join(workspace, 'web-app');
-  const appDir = join(workspace, 'app');
-  return existsSync(join(webAppDir, 'index.html')) ? webAppDir : appDir;
+// Viz directory at workspace root
+function getVizDir(workspace) {
+  return join(workspace, 'viz');
 }
 
-// In framework mode, always serve from framework's web-app directory
-let appDir = isFrameworkMode ? join(cwd, 'web-app') : getAppDir(currentWorkspace);
+
+// Current viz directory
+let vizDir = getVizDir(currentWorkspace);
 
 // Middleware - Allow CORS for Electron (null origin) and regular browsers
 app.use((req, res, next) => {
@@ -59,25 +57,22 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json());
 
-// Initialize registry (will be re-initialized on workspace change)
-let registry = new VizRegistry(appDir);
+// Initialize registry using viz directory at workspace root
+let registry = new VizRegistry(vizDir);
 
 console.log(`📁 Current workspace: ${currentWorkspace}`);
 console.log(`📁 Config file: ${getConfigPath()}`);
-console.log(`📁 Registry path: ${registry.registryPath}`);
-if (isFrameworkMode) {
-  console.log(`⚠️  Framework mode detected - serving onboarding page`);
-}
+console.log(`📁 Viz directory: ${vizDir}`);
 
 /**
  * Switch to a different workspace
  */
 function switchWorkspace(workspacePath) {
   currentWorkspace = workspacePath;
-  appDir = getAppDir(currentWorkspace);
+  vizDir = getVizDir(currentWorkspace);
 
-  // Re-initialize registry
-  registry = new VizRegistry(appDir);
+  // Re-initialize registry with new workspace viz dir
+  registry = new VizRegistry(vizDir);
 
   // Persist workspace selection
   setCurrentWorkspace(workspacePath);
@@ -544,11 +539,11 @@ app.delete('/api/viz/:id', async (req, res) => {
     // Delete the HTML file from viz folder
     // Prevent path traversal attacks - sanitize filename
     const safeFilename = basename(viz.filename);
-    const vizPath = join(appDir, 'viz', safeFilename);
+    const vizPath = join(vizDir, safeFilename);
 
     // Verify the resolved path is still within viz directory
     const normalizedPath = normalize(vizPath);
-    const normalizedVizDir = normalize(join(appDir, 'viz'));
+    const normalizedVizDir = normalize(vizDir);
     if (!normalizedPath.startsWith(normalizedVizDir)) {
       console.error(`❌ Path traversal detected: ${viz.filename}`);
       return res.status(400).json({
@@ -634,7 +629,7 @@ app.get('/api/viz/:id', async (req, res) => {
     }
 
     // Serve the actual HTML file
-    const vizPath = join(appDir, 'viz', viz.filename);
+    const vizPath = join(vizDir, viz.filename);
     res.sendFile(vizPath);
 
     // Record view
@@ -665,16 +660,9 @@ app.post('/api/viz/:id/pin', async (req, res) => {
   const { pinned } = req.body;
 
   try {
-    // Check both web-app and app directories for registry
-    const webAppRegistry = join(currentWorkspace, 'web-app', 'assets', 'visualizations.json');
-    const appRegistry = join(currentWorkspace, 'app', 'assets', 'visualizations.json');
-
-    let vizRegistryPath;
-    if (existsSync(webAppRegistry)) {
-      vizRegistryPath = webAppRegistry;
-    } else if (existsSync(appRegistry)) {
-      vizRegistryPath = appRegistry;
-    } else {
+    // Registry now in data/assets/
+    const vizRegistryPath = join(vizDir, 'visualizations.json');
+    if (!existsSync(vizRegistryPath)) {
       return res.json({ success: false, error: 'Visualization registry not found' });
     }
 
@@ -740,14 +728,13 @@ app.post('/api/workspace/switch', (req, res) => {
       });
     }
 
-    // Validate workspace exists (check both web-app/ and app/ directories)
-    const webAppVizPath = join(workspacePath, 'web-app', 'assets', 'visualizations.json');
-    const appVizPath = join(workspacePath, 'app', 'assets', 'visualizations.json');
+    // Validate workspace exists (check viz/ directory)
+    const vizPath = join(workspacePath, 'viz', 'visualizations.json');
 
-    if (!existsSync(webAppVizPath) && !existsSync(appVizPath)) {
+    if (!existsSync(vizPath)) {
       return res.status(404).json({
         success: false,
-        error: 'Invalid workspace: visualizations.json not found in web-app/ or app/ directory'
+        error: 'Invalid workspace: visualizations.json not found in viz/'
       });
     }
 
@@ -868,7 +855,7 @@ app.get('/api/workspace/stats', (req, res) => {
 
     // Get visualizations count
     try {
-      const vizRegistryPath = join(currentWorkspace, 'web-app/assets/visualizations.json');
+      const vizRegistryPath = join(vizDir, 'visualizations.json');
       if (existsSync(vizRegistryPath)) {
         const vizRegistry = JSON.parse(readFileSync(vizRegistryPath, 'utf8'));
         stats.visualizationCount = vizRegistry.visualizations?.length || 0;
@@ -931,7 +918,7 @@ app.get('/api/workspace/stats', (req, res) => {
  */
 app.get('/api/workspace/framework-stats', (req, res) => {
   try {
-    const frameworkDirs = ['tools', 'web-app', 'electron-app', 'scripts'];
+    const frameworkDirs = ['tools', 'app', 'data', 'scripts'];
 
     // Check if current workspace is a subdirectory (like my-workspace)
     // If so, use parent directory for framework stats
@@ -1066,7 +1053,7 @@ app.get('/api/workspace/node-modules-breakdown', (req, res) => {
     }
 
     // Get framework directories
-    const frameworkDirs = ['tools', 'web-app', 'connectors', 'data', 'scripts', 'my-workspace'];
+    const frameworkDirs = ['tools', 'app', 'connectors', 'data', 'scripts'];
     frameworkDirs.forEach(dir => {
       const dirPath = join(frameworkRoot, dir);
       if (existsSync(dirPath)) {
@@ -1353,7 +1340,14 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
     });
 
     console.log(`✅ Sync completed for ${id}`);
-    res.json({ success: true, output });
+
+    // Update last_sync date in data-sources.json
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    dataSourcesData.sources[id].last_sync = today;
+    writeFileSync(dataSourcesFile, JSON.stringify(dataSourcesData, null, 2));
+    console.log(`📅 Updated last_sync for ${id} to ${today}`);
+
+    res.json({ success: true, output, last_sync: today });
   } catch (error) {
     console.error('Sync error:', error);
     res.status(500).json({
@@ -1705,6 +1699,41 @@ app.post('/api/mediatrader/query', (req, res) => {
 });
 
 /**
+ * POST /api/chat
+ * Chat endpoint for browser mode AI interaction
+ * Body: { messages: [{ role: 'user'|'assistant', content: string }] }
+ */
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { messages, currentViz } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({
+        success: false,
+        error: 'messages array is required'
+      });
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    console.log(`💬 Chat request: "${lastMessage?.content?.substring(0, 50)}..."`);
+    if (currentViz) {
+      console.log(`📊 Context viz: ${currentViz.title} (${currentViz.filename})`);
+    }
+
+    // Call the chat handler with Claude API
+    const result = await handleChat(messages, currentWorkspace, currentViz);
+
+    res.json(result);
+  } catch (error) {
+    console.error('Chat API error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /health
  * Health check endpoint
  */
@@ -1717,24 +1746,24 @@ app.get('/health', (req, res) => {
 });
 
 /**
- * Static file serving with no-cache headers (dynamic based on current workspace)
+ * Serve viz files from workspace viz/ directory
+ * Dynamic middleware that uses current vizDir (updates on workspace switch)
  */
-app.use((req, res, next) => {
-  // Re-create static middleware for current workspace on each request
-  express.static(appDir, {
+app.use('/viz', (req, res, next) => {
+  express.static(vizDir, {
     setHeaders: (res, path) => {
-      // Disable caching for all files
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.set('Pragma', 'no-cache');
-      res.set('Expires', '0');
     }
   })(req, res, next);
 });
 
+// Note: UI is served by Vite dev server on port 5173 during development
+// Port 3000 is API-only. For production, run `npm run build` and serve app/dist separately.
+
 // Start server
 app.listen(PORT, '127.0.0.1', () => {
-  console.log(`🚀 LocalBase Insights server running on http://localhost:${PORT}`);
-  console.log(`📁 Serving static files from: ${appDir}`);
+  console.log(`🚀 LocalBase API server running on http://localhost:${PORT}`);
+  console.log(`📁 Viz served from: ${vizDir}`);
   console.log(`📋 API endpoints:`);
   console.log(`   GET    /api/workspaces         - List available workspaces`);
   console.log(`   POST   /api/workspace/switch   - Switch to different workspace`);
