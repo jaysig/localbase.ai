@@ -13,14 +13,14 @@ npm install
 npm start
 ```
 
-Open http://localhost:3000 - you'll see a setup guide with instructions to create your first workspace.
+Open http://localhost:3000
 
 ## Ask AI About Your Data
 
 ```bash
 # In another terminal
 npm run mcp  # Start MCP server
-claude       # Or any local AI with MCP support
+claude       # Or any MCP-compatible AI
 ```
 
 Then ask questions:
@@ -39,43 +39,24 @@ Then ask questions:
 
 ```bash
 # Copy example connector
-cp -R connectors/example connectors/quickbooks
+cp -R connectors/example connectors/mydata
 
 # Add your API credentials
 cp env.local.example env.local
 # Edit env.local with your API keys
 ```
 
-Edit `connectors/quickbooks/index.js` to fetch your data.
-
-See `connectors/example/README.md` for details.
-
-## Desktop App (Optional)
-
-Build and run the Electron desktop app for an IDE-like experience with embedded terminal and Claude integration:
-
-```bash
-cd electron-app
-npm install
-npm run electron:dev      # Development mode
-npm run electron:build    # Production build (macOS, Linux)
-```
-
-The desktop app includes:
-- Embedded terminal with full shell access
-- Auto-starting MCP server for Claude integration
-- Live visualization updates (refreshes every 3 seconds)
-- Server health monitoring
+Edit `connectors/mydata/index.js` to fetch your data. See `connectors/example/README.md` for details.
 
 ## What's Inside
 
 ```
 localbase.ai/
+├── app/             # Browser UI (Vite + React)
+├── connectors/      # Your data sources
 ├── tools/           # Framework (MCP server, charts, etc.)
-├── connectors/      # Your data sources (start with examples)
-├── data/           # SQLite databases
-├── web-app/        # Dashboard
-└── electron-app/   # Desktop application
+├── viz/             # Visualization registry
+└── data/            # SQLite databases
 ```
 
 ## Stack
@@ -84,25 +65,10 @@ localbase.ai/
 - **SQLite** - Local database
 - **MCP** - AI integration
 - **Express** - Web server
-- **Electron** - Desktop app (optional)
+- **React** - Dashboard UI
 - **ApexCharts** - Visualizations
 
 ## Requirements
 
 - Node.js 18+
 - Claude Desktop (or any MCP-compatible AI)
-
-## Security
-
-Run security check before commits:
-```bash
-./scripts/security-check.sh
-```
-
-Automatically checks for:
-- Secrets and API keys
-- Personal information
-- Database files
-- Environment variables
-
----
