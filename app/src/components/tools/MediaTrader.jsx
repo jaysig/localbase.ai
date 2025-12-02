@@ -2264,6 +2264,7 @@ export default function MediaTrader() {
   const [activeFeature, setActiveFeature] = useState(null)
   const [config, setConfig] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [dataSourceStatuses, setDataSourceStatuses] = useState({})
 
   // Load tool config from workspace on mount
   useEffect(() => {
@@ -2284,21 +2285,21 @@ export default function MediaTrader() {
     loadConfig()
   }, [])
 
-  // Hardcoded status for now - will add dynamic checking later via IPC
-  const dataSourceStatuses = {
-    'google-ads': { exists: true, status: 'active', fileSize: '104 MB', lastUpdate: 'Updated today' },
-    'facebook-ads': { exists: true, status: 'active', fileSize: '545 KB', lastUpdate: 'Updated today' },
-    'bing-ads': { exists: true, status: 'active', fileSize: '527 MB', lastUpdate: 'Updated today' },
-    'hubspot-deals': { exists: true, status: 'active', fileSize: '2.1 MB', lastUpdate: 'Updated today' },
-    'hubspot-companies': { exists: true, status: 'active', fileSize: '8.4 MB', lastUpdate: 'Updated today' },
-    'organic-clicks': { exists: true, status: 'active', fileSize: '156 KB', lastUpdate: 'Updated today' },
-    'organic-impressions': { exists: true, status: 'active', fileSize: '156 KB', lastUpdate: 'Updated today' },
-    'direct-traffic': { exists: true, status: 'active', fileSize: '1.2 KB', lastUpdate: 'Updated today' },
-    'youtube-views': { exists: true, status: 'active', fileSize: '890 B', lastUpdate: 'Updated today' },
-    'google-paid-impressions': { exists: true, status: 'active', fileSize: '186 MB', lastUpdate: 'Updated today' },
-    'facebook-paid-impressions': { exists: true, status: 'active', fileSize: '1.0 MB', lastUpdate: 'Updated today' },
-    'bing-paid-impressions': { exists: true, status: 'active', fileSize: '527 MB', lastUpdate: 'Updated today' }
-  }
+  // Load data source stats dynamically
+  useEffect(() => {
+    async function loadDataSourceStats() {
+      try {
+        const response = await fetch('http://localhost:3000/api/mediatrader/datasource-stats')
+        const result = await response.json()
+        if (result.success && result.stats) {
+          setDataSourceStatuses(result.stats)
+        }
+      } catch (error) {
+        console.error('Error loading data source stats:', error)
+      }
+    }
+    loadDataSourceStats()
+  }, [])
 
   // Get tool name from config (defaults to "MediaTrader" for backwards compatibility)
   const toolName = config?.name || 'MediaTrader'

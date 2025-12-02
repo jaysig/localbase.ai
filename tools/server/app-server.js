@@ -1542,8 +1542,8 @@ app.post('/api/db/query', (req, res) => {
 
 /**
  * GET /api/mediatrader/datasource-stats
- * Get file stats (size, mtime) for all MediaTrader data sources
- * Returns { sourceId: { exists, fileSize, lastUpdate, mtime } }
+ * Get file stats (size, last modified) for all data sources in MediaTrader config
+ * Returns: { [sourceId]: { fileSize, lastUpdate, exists } }
  */
 app.get('/api/mediatrader/datasource-stats', (req, res) => {
   try {
@@ -1567,73 +1567,68 @@ app.get('/api/mediatrader/datasource-stats', (req, res) => {
     }
 
     if (!config) {
-      return res.json({ success: true, stats: {} });
+      return res.json({ success: false, error: 'MediaTrader config not found', stats: {} });
     }
 
-    // Collect all sources from channels and conversionSources
-    const allSources = [...(config.channels || []), ...(config.conversionSources || [])];
+    // Collect all unique data source paths
+    const sources = [...(config.channels || []), ...(config.conversionSources || [])];
     const stats = {};
 
-    // Helper to format file size
-    const formatSize = (bytes) => {
-      if (bytes < 1024) return `${bytes} B`;
-      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-    };
+    // Track which files we've already checked to avoid duplicate stat calls
+    const fileStatsCache = {};
 
-    // Helper to format relative date
-    const formatRelativeDate = (mtime) => {
-      const now = new Date();
-      const diff = now - mtime;
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-      if (days === 0) return 'Updated today';
-      if (days === 1) return 'Updated yesterday';
-      if (days < 7) return `Updated ${days} days ago`;
-      if (days < 30) return `Updated ${Math.floor(days / 7)} weeks ago`;
-      return mtime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    };
-
-    for (const source of allSources) {
+    for (const source of sources) {
       if (!source.dataSource) continue;
 
       const filePath = join(currentWorkspace, source.dataSource);
 
-      try {
+      // Use cached stats if we already checked this file
+      if (!fileStatsCache[filePath]) {
         if (existsSync(filePath)) {
           const fileStat = statSync(filePath);
-          stats[source.id] = {
-            exists: true,
-            fileSize: formatSize(fileStat.size),
-            lastUpdate: formatRelativeDate(fileStat.mtime),
-            mtime: fileStat.mtime.toISOString(),
-            status: 'active'
-          };
+          const sizeBytes = fileStat.size;
+          const mtime = fileStat.mtime;
+
+          // Format file size
+          let fileSize;
+          if (sizeBytes < 1024) {
+            fileSize = `${sizeBytes} B`;
+          } else if (sizeBytes < 1024 * 1024) {
+            fileSize = `${(sizeBytes / 1024).toFixed(1)} KB`;
+          } else if (sizeBytes < 1024 * 1024 * 1024) {
+            fileSize = `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+          } else {
+            fileSize = `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+          }
+
+          // Format last update time
+          const now = new Date();
+          const diff = now - mtime;
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          let lastUpdate;
+          if (days === 0) {
+            lastUpdate = 'Updated today';
+          } else if (days === 1) {
+            lastUpdate = 'Updated yesterday';
+          } else if (days < 7) {
+            lastUpdate = `Updated ${days} days ago`;
+          } else {
+            lastUpdate = mtime.toLocaleDateString();
+          }
+
+          fileStatsCache[filePath] = { exists: true, fileSize, lastUpdate };
         } else {
-          stats[source.id] = {
-            exists: false,
-            fileSize: 'N/A',
-            lastUpdate: 'File not found',
-            mtime: null,
-            status: 'missing'
-          };
+          fileStatsCache[filePath] = { exists: false, fileSize: 'N/A', lastUpdate: 'N/A' };
         }
-      } catch (err) {
-        stats[source.id] = {
-          exists: false,
-          fileSize: 'N/A',
-          lastUpdate: 'Error reading file',
-          mtime: null,
-          status: 'error'
-        };
       }
+
+      stats[source.id] = fileStatsCache[filePath];
     }
 
     res.json({ success: true, stats });
   } catch (error) {
     console.error('Error getting datasource stats:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message, stats: {} });
   }
 });
 
