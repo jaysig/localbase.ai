@@ -38,6 +38,9 @@
     "tesseract.js": "^6.0.1",
     "zod": "^3.25.76"
   },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
   "keywords": [
     "mixpanel",
     "analytics",

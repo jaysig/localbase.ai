@@ -494,15 +494,15 @@ Use read_visualization to get the current code, then use create_visualization wi
   let finalResponse = '';
 
   try {
-    // Initial API call - use streaming for Opus compatibility
-    let response = await client.messages.create({
+    // Initial API call - use streaming for Opus (required for operations > 10 min)
+    let stream = await client.messages.stream({
       model: 'claude-opus-4-20250514',
       max_tokens: 16384,
       system: systemPrompt,
       tools,
-      messages: anthropicMessages,
-      stream: false  // Opus works without streaming now
+      messages: anthropicMessages
     });
+    let response = await stream.finalMessage();
 
     // Handle tool use loop
     while (response.stop_reason === 'tool_use') {
@@ -531,14 +531,14 @@ Use read_visualization to get the current code, then use create_visualization wi
       // Add tool results and continue
       anthropicMessages.push({ role: 'user', content: toolResults });
 
-      response = await client.messages.create({
+      stream = await client.messages.stream({
         model: 'claude-opus-4-20250514',
         max_tokens: 16384,
         system: systemPrompt,
         tools,
-        messages: anthropicMessages,
-        stream: false
+        messages: anthropicMessages
       });
+      response = await stream.finalMessage();
     }
 
     // Log why we exited the loop
