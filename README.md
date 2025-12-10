@@ -15,6 +15,15 @@ npm install
 
 Open http://localhost:5173
 
+## Data Setup
+
+The `data/` folder is not included in this repo (it's gitignored). You'll need to:
+
+1. **Add the data folder** - If you have the `data/` folder, copy it to your repo root
+2. **Add env.local** - Copy `env.local.example` to `env.local` and add API credentials
+
+The data folder contains SQLite databases for each connector. Without it, the app will run but show no data.
+
 ## Using the Web UI
 
 The LocalBase dashboard gives you:
