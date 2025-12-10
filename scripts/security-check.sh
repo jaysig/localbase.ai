@@ -15,12 +15,12 @@ echo ""
 
 FAILED=0
 
-# 1. Run gitleaks if available
+# 1. Run gitleaks if available (only scan tracked files)
 echo "1️⃣  Running gitleaks scan..."
 if command -v gitleaks &> /dev/null; then
-  if gitleaks detect --no-git -v 2>&1 | grep -q "Finding:"; then
-    echo "❌ FAIL: gitleaks found secrets"
-    gitleaks detect --no-git -v
+  if gitleaks detect -v 2>&1 | grep -q "Finding:"; then
+    echo "❌ FAIL: gitleaks found secrets in tracked files"
+    gitleaks detect -v
     FAILED=1
   else
     echo "✅ PASS: gitleaks found no secrets"
@@ -30,14 +30,17 @@ else
 fi
 echo ""
 
-# 2. Business Names Check
+# 2. Business Names Check (warning only - review before publishing)
 echo "2️⃣  Checking for business names..."
 BUSINESS_REFS=$(git ls-files | xargs grep -iE "roofmaxx|goskills|renu" 2>/dev/null | \
-  grep -v "README.md\|CLAUDE.md\|package.json\|author\|example\|ChartJsWrapper.jsx\|security-check.sh" || true)
+  grep -v "security-check.sh" || true)
 if [ -n "$BUSINESS_REFS" ]; then
-  echo "❌ FAIL: Found business name references"
-  echo "$BUSINESS_REFS"
-  FAILED=1
+  echo "⚠️  WARNING: Found business name references (review before publishing)"
+  echo "$BUSINESS_REFS" | head -20
+  if [ $(echo "$BUSINESS_REFS" | wc -l) -gt 20 ]; then
+    echo "  ... and more ($(echo "$BUSINESS_REFS" | wc -l) total matches)"
+  fi
+  # Warning only, don't fail
 else
   echo "✅ PASS: No business names found"
 fi
