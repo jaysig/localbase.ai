@@ -844,9 +844,13 @@ function SignalsView({ onBack, config, toolName }) {
         await loadSignals()
       } else {
         console.error('Error refreshing signals:', result.error)
+        // Fall back to loading existing data even if refresh fails
+        await loadSignals()
       }
     } catch (error) {
       console.error('Error refreshing signals:', error)
+      // Fall back to loading existing data on network error
+      await loadSignals()
     }
     setRefreshing(false)
   }
@@ -854,7 +858,7 @@ function SignalsView({ onBack, config, toolName }) {
   // Load signals on mount, auto-refresh in browser mode
   useEffect(() => {
     if (isBrowserMode) {
-      // Browser mode: refresh data first, then load
+      // Browser mode: try to refresh, then load (with fallback to existing data)
       refreshSignals()
     } else {
       // Electron mode: just load existing data
