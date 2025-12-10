@@ -46,35 +46,40 @@ else
 fi
 echo ""
 
-# 3. Personal Info Check
-echo "3️⃣  Checking for personal information..."
-PERSONAL_INFO=$(git ls-files | xargs grep -E "/Users/[a-z]+|riggin|ryan" 2>/dev/null | \
-  grep -v "example\|README\|CLAUDE\|author\|package.json\|security-check.sh" || true)
-if [ -n "$PERSONAL_INFO" ]; then
-  echo "❌ FAIL: Found personal information"
-  echo "$PERSONAL_INFO"
-  FAILED=1
-else
-  echo "✅ PASS: No personal info found"
-fi
-echo ""
-
-# 4. Hardcoded Paths Check
-echo "4️⃣  Checking for hardcoded paths..."
+# 3. Hardcoded Paths Check (includes personal usernames)
+echo "3️⃣  Checking for hardcoded paths..."
 HARDCODED_PATHS=$(git ls-files | xargs grep -E "/(Work|Users|home)/[a-zA-Z]+/" 2>/dev/null | \
-  grep -v "README\|CLAUDE\|example\|ChartJsWrapper\|sync-framework" || true)
+  grep -v "security-check.sh" || true)
 if [ -n "$HARDCODED_PATHS" ]; then
   echo "❌ FAIL: Found hardcoded paths"
-  echo "$HARDCODED_PATHS"
+  echo "$HARDCODED_PATHS" | head -20
+  if [ $(echo "$HARDCODED_PATHS" | wc -l) -gt 20 ]; then
+    echo "  ... and more ($(echo "$HARDCODED_PATHS" | wc -l) total matches)"
+  fi
   FAILED=1
 else
   echo "✅ PASS: No hardcoded paths"
 fi
 echo ""
 
+# 4. Data PII Check (phone numbers, addresses in data files)
+echo "4️⃣  Checking for data PII in tracked files..."
+# Look for phone number patterns in CSVs and data files
+DATA_PII=$(git ls-files "*.csv" "*.json" 2>/dev/null | xargs grep -lE "\b[0-9]{3}[-.]?[0-9]{3}[-.]?[0-9]{4}\b" 2>/dev/null | \
+  grep -v "example\|test\|mock" || true)
+if [ -n "$DATA_PII" ]; then
+  echo "❌ FAIL: Found potential PII (phone numbers) in data files"
+  echo "$DATA_PII"
+  echo "  These files may contain personal data - move to gitignored data/ folder"
+  FAILED=1
+else
+  echo "✅ PASS: No data PII found"
+fi
+echo ""
+
 # 5. Database Files Check
 echo "5️⃣  Checking for database files..."
-DB_FILES=$(git ls-files | grep "\.db$\|\.sqlite$\|\.sqlite3$" || true)
+DB_FILES=$(git ls-files | grep -E "\.db$|\.sqlite$|\.sqlite3$" || true)
 if [ -n "$DB_FILES" ]; then
   echo "❌ FAIL: Found database files in git"
   echo "$DB_FILES"
