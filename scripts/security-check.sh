@@ -117,7 +117,7 @@ echo ""
 # 8. Email Addresses Check
 echo "8️⃣  Checking for email addresses..."
 EMAILS=$(git ls-files | xargs grep -iE "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" 2>/dev/null | \
-  grep -v "example@\|noreply@\|sam@sgratzl\|README\|CLAUDE\|package.json\|author" || true)
+  grep -v "example@\|noreply@\|sam@sgratzl\|README\|CLAUDE\|package.json\|author\|LIKE '%@\|security-check.sh" || true)
 if [ -n "$EMAILS" ]; then
   echo "❌ FAIL: Found email addresses"
   echo "$EMAILS"
