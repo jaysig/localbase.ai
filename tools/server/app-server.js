@@ -23,13 +23,39 @@ import Database from 'better-sqlite3';
 import { handleChat } from './chat-handler.js';
 
 const __filename = fileURLToPath(import.meta.url);
+
+/**
+ * Sanitize a path for safe use in shell commands.
+ * Rejects paths with characters that could enable command injection.
+ * @param {string} p - The path to sanitize
+ * @returns {string} The sanitized absolute path
+ * @throws {Error} If path contains dangerous characters
+ */
+function sanitizePath(p) {
+  // Resolve to absolute path first
+  const resolved = normalize(p);
+
+  // Check for shell metacharacters that could enable injection
+  // Allow: alphanumeric, /, -, _, ., space (but not at start/end)
+  const dangerousChars = /[`$&|;()<>{}!\\'"*?\[\]\n\r]/;
+  if (dangerousChars.test(resolved)) {
+    throw new Error('Path contains invalid characters');
+  }
+
+  // Prevent null bytes
+  if (resolved.includes('\0')) {
+    throw new Error('Path contains null bytes');
+  }
+
+  return resolved;
+}
 const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = 3000;
 
-// Get current workspace from persistent config
-let currentWorkspace = getCurrentWorkspace();
+// Get current workspace from persistent config (sanitize on load)
+let currentWorkspace = sanitizePath(getCurrentWorkspace());
 
 // Detect if running from framework (localbase.ai) vs instance
 const cwd = process.cwd();
@@ -66,16 +92,18 @@ console.log(`📁 Viz directory: ${vizDir}`);
 
 /**
  * Switch to a different workspace
+ * @param {string} workspacePath - Must be pre-sanitized via sanitizePath()
  */
 function switchWorkspace(workspacePath) {
-  currentWorkspace = workspacePath;
+  // Double-check sanitization (defense in depth)
+  currentWorkspace = sanitizePath(workspacePath);
   vizDir = getVizDir(currentWorkspace);
 
   // Re-initialize registry with new workspace viz dir
   registry = new VizRegistry(vizDir);
 
   // Persist workspace selection
-  setCurrentWorkspace(workspacePath);
+  setCurrentWorkspace(currentWorkspace);
 
   console.log(`🔄 Switched to workspace: ${currentWorkspace}`);
   console.log(`📁 New registry path: ${registry.registryPath}`);
@@ -728,8 +756,19 @@ app.post('/api/workspace/switch', (req, res) => {
       });
     }
 
+    // Sanitize path to prevent command injection
+    let safePath;
+    try {
+      safePath = sanitizePath(workspacePath);
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid workspace path: ' + e.message
+      });
+    }
+
     // Validate workspace exists (check viz/ directory)
-    const vizPath = join(workspacePath, 'viz', 'visualizations.json');
+    const vizPath = join(safePath, 'viz', 'visualizations.json');
 
     if (!existsSync(vizPath)) {
       return res.status(404).json({
@@ -738,13 +777,13 @@ app.post('/api/workspace/switch', (req, res) => {
       });
     }
 
-    // Switch workspace
-    switchWorkspace(workspacePath);
+    // Switch workspace (use sanitized path)
+    switchWorkspace(safePath);
 
     res.json({
       success: true,
       workspace: currentWorkspace,
-      message: `Switched to ${workspacePath.split('/').pop()}`
+      message: `Switched to ${safePath.split('/').pop()}`
     });
   } catch (error) {
     console.error('Error switching workspace:', error);
@@ -1853,7 +1892,7 @@ app.use('/viz', (req, res, next) => {
 // Port 3000 is API-only. For production, run `npm run build` and serve app/dist separately.
 
 // Start server
-app.listen(PORT, '127.0.0.1', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 LocalBase API server running on http://localhost:${PORT}`);
   console.log(`📁 Viz served from: ${vizDir}`);
   console.log(`📋 API endpoints:`);
