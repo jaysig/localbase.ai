@@ -35,6 +35,13 @@ rsync -av \
   --exclude '.DS_Store' \
   $FRAMEWORK_DIR/scripts/ $INSTANCE_DIR/scripts/
 
+# Sync .claude/commands/ (Claude Code slash commands)
+echo "🤖 Syncing .claude/commands/..."
+mkdir -p $INSTANCE_DIR/.claude/commands
+rsync -av \
+  --exclude '.DS_Store' \
+  $FRAMEWORK_DIR/.claude/commands/ $INSTANCE_DIR/.claude/commands/
+
 # Sync connector base classes (NOT business connectors)
 echo "🔌 Syncing connector base classes..."
 cp $FRAMEWORK_DIR/connectors/MCPAdapter.js $INSTANCE_DIR/connectors/ 2>/dev/null || true
