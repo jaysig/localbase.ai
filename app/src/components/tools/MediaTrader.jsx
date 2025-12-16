@@ -162,43 +162,50 @@ function calculateCorrelationMatrix(spendData, outcomes, maxLag = 12) {
 function groupVariables(variables) {
   const groups = {
     'Ad Spend': [],
-    'Website Traffic': [],
-    'Paid Impressions': [],
-    'Social Engagement': [],
-    'HubSpot': [],
-    'Revenue Stats': [],
-    'Platform Stats': [],
-    'Genie AI': [],
-    'G2 Intent': [],
-    'Mixpanel': []
+    'HubSpot Deals': [],
+    'Revenue': [],
+    'Conversions': [],
+    'Meetings': [],
+    'Analytics': [],
+    'Organic': [],
+    'Other': []
   }
 
   variables.forEach(variable => {
     const id = variable.id
-    const sourceType = variable.source?.type
+    const label = variable.label?.toLowerCase() || ''
 
-    if (id === 'totalSpend' || id.startsWith('google-ads') || id.startsWith('facebook-ads') || id.startsWith('bing-ads')) {
-      if (id.includes('impressions')) {
-        groups['Paid Impressions'].push(variable)
-      } else {
-        groups['Ad Spend'].push(variable)
-      }
-    } else if (id.startsWith('organic-') || id.includes('direct-traffic')) {
-      groups['Website Traffic'].push(variable)
-    } else if (id.startsWith('youtube-') || id.startsWith('facebook-organic')) {
-      groups['Social Engagement'].push(variable)
-    } else if (sourceType === 'hubspot' || id.startsWith('hubspot-') || id.startsWith('meetings-')) {
-      groups['HubSpot'].push(variable)
-    } else if (id.startsWith('platform-revenue') || id.includes('revenue')) {
-      groups['Revenue Stats'].push(variable)
-    } else if (id.startsWith('platform-') || id.startsWith('trial-') || id.startsWith('active-') || id.startsWith('new-') || id.startsWith('paid-')) {
-      groups['Platform Stats'].push(variable)
-    } else if (id.startsWith('genie-')) {
-      groups['Genie AI'].push(variable)
-    } else if (id.startsWith('g2-')) {
-      groups['G2 Intent'].push(variable)
-    } else if (id.startsWith('mixpanel-')) {
-      groups['Mixpanel'].push(variable)
+    // Ad spend channels
+    if (id === 'totalSpend' || id === 'google-ads' || id === 'facebook-ads' || id === 'bing-ads') {
+      groups['Ad Spend'].push(variable)
+    }
+    // HubSpot deals (counts)
+    else if (id === 'newDeals' || id === 'renewalDeals' || id === 'expansionDeals') {
+      groups['HubSpot Deals'].push(variable)
+    }
+    // Revenue metrics
+    else if (id.includes('Revenue') || id === 'totalRevenue') {
+      groups['Revenue'].push(variable)
+    }
+    // Meetings
+    else if (id.includes('meetings') || id.includes('Meetings')) {
+      groups['Meetings'].push(variable)
+    }
+    // Conversions / signups
+    else if (id === 'businessAccounts' || id === 'userAccounts' || id === 'businessCreated' || id === 'businessSignups') {
+      groups['Conversions'].push(variable)
+    }
+    // Analytics (GA4, GSC)
+    else if (id.startsWith('ga4') || id.startsWith('gsc')) {
+      groups['Analytics'].push(variable)
+    }
+    // Organic (YouTube, etc)
+    else if (id === 'youtubeViews' || id.includes('organic') || id.includes('Organic')) {
+      groups['Organic'].push(variable)
+    }
+    // Fallback
+    else {
+      groups['Other'].push(variable)
     }
   })
 
@@ -801,6 +808,13 @@ function MatrixView({ allVariables, lagMonths, getCorrelationColor }) {
 }
 
 // Signals View Component
+// Helper to get date string for N days ago
+function getDateNDaysAgo(n) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().split('T')[0]
+}
+
 function SignalsView({ onBack, config, toolName }) {
   const [signals, setSignals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -808,6 +822,9 @@ function SignalsView({ onBack, config, toolName }) {
   const [filter, setFilter] = useState('all') // all, high, medium, low
   const [directionFilter, setDirectionFilter] = useState(null) // null, 'up', 'down'
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [date1, setDate1] = useState('') // Current period date
+  const [date2, setDate2] = useState('') // Comparison period date
+  const [comparisonInfo, setComparisonInfo] = useState(null)
 
   // Check if we're in browser mode
   const isBrowserMode = !window.electronAPI?.terminal
@@ -821,6 +838,15 @@ function SignalsView({ onBack, config, toolName }) {
         const data = JSON.parse(result.content)
         setSignals(data.signals)
         setLastUpdated(new Date(data.generated))
+        setComparisonInfo({
+          mode: data.comparisonMode || 'latest',
+          weeksAgo: data.weeksAgo || 0,
+          date1: data.date1 || null,
+          date2: data.date2 || null
+        })
+        // Update date inputs if we have stored dates
+        if (data.date1) setDate1(data.date1)
+        if (data.date2) setDate2(data.date2)
       } else {
         console.error('Error loading signals:', result.error)
       }
@@ -832,12 +858,16 @@ function SignalsView({ onBack, config, toolName }) {
   }
 
   // Refresh signals data (browser mode only - auto-runs query script)
-  async function refreshSignals() {
+  async function refreshSignals(d1 = date1, d2 = date2) {
     if (!isBrowserMode) return
 
     setRefreshing(true)
     try {
-      const res = await fetch('http://localhost:3000/api/signals/refresh', { method: 'POST' })
+      let url = 'http://localhost:3000/api/signals/refresh'
+      if (d1 && d2) {
+        url += `?date1=${d1}&date2=${d2}`
+      }
+      const res = await fetch(url, { method: 'POST' })
       const result = await res.json()
       if (result.success) {
         // Reload the updated data
@@ -853,6 +883,45 @@ function SignalsView({ onBack, config, toolName }) {
       await loadSignals()
     }
     setRefreshing(false)
+  }
+
+  // Handle date range change
+  function handleCompare() {
+    if (date1 && date2) {
+      refreshSignals(date1, date2)
+    }
+  }
+
+  // Quick presets
+  function applyPreset(preset) {
+    let d1, d2
+    const today = new Date()
+    const dayOfWeek = today.getDay()
+
+    switch (preset) {
+      case 'last-week':
+        // Last complete week vs week before
+        d1 = getDateNDaysAgo(dayOfWeek + 7) // Last week
+        d2 = getDateNDaysAgo(dayOfWeek + 14) // Week before last
+        break
+      case 'this-week':
+        // This week vs last week
+        d1 = getDateNDaysAgo(dayOfWeek) // This week (Sunday)
+        d2 = getDateNDaysAgo(dayOfWeek + 7) // Last week
+        break
+      case 'last-month':
+        // Last month vs month before
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 15)
+        const monthBefore = new Date(today.getFullYear(), today.getMonth() - 2, 15)
+        d1 = lastMonth.toISOString().split('T')[0]
+        d2 = monthBefore.toISOString().split('T')[0]
+        break
+      default:
+        return
+    }
+    setDate1(d1)
+    setDate2(d2)
+    refreshSignals(d1, d2)
   }
 
   // Load signals on mount, auto-refresh in browser mode
@@ -928,25 +997,98 @@ function SignalsView({ onBack, config, toolName }) {
       </div>
 
       <div className="flex-1 p-6 overflow-auto">
-        {/* Stats Bar */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="text-sm text-muted-foreground mb-1">Total Signals</div>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="text-sm text-muted-foreground mb-1">High Priority</div>
-            <div className="text-2xl font-bold text-red-400">{stats.highPriority}</div>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="text-sm text-muted-foreground mb-1">Last Updated</div>
-            <div className="text-lg font-semibold">
-              {lastUpdated ? lastUpdated.toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit'
-              }) : '-'}
+        {/* Date Range Selector + Stats Bar */}
+        <div className="flex items-start gap-4 mb-6">
+          {/* Date Range Selector */}
+          {isBrowserMode && (
+            <div className="bg-card border border-border rounded-lg p-4 min-w-[320px]">
+              <div className="text-sm text-muted-foreground mb-3">Compare Periods</div>
+
+              {/* Quick Presets */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => applyPreset('last-week')}
+                  disabled={refreshing}
+                  className="px-2 py-1 text-xs bg-secondary text-muted-foreground hover:text-foreground rounded transition-colors disabled:opacity-50"
+                >
+                  Last Week
+                </button>
+                <button
+                  onClick={() => applyPreset('this-week')}
+                  disabled={refreshing}
+                  className="px-2 py-1 text-xs bg-secondary text-muted-foreground hover:text-foreground rounded transition-colors disabled:opacity-50"
+                >
+                  This Week
+                </button>
+                <button
+                  onClick={() => applyPreset('last-month')}
+                  disabled={refreshing}
+                  className="px-2 py-1 text-xs bg-secondary text-muted-foreground hover:text-foreground rounded transition-colors disabled:opacity-50"
+                >
+                  Last Month
+                </button>
+              </div>
+
+              {/* Date Inputs */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground block mb-1">Current</label>
+                  <input
+                    type="date"
+                    value={date1}
+                    onChange={(e) => setDate1(e.target.value)}
+                    disabled={refreshing}
+                    className="w-full px-2 py-1.5 bg-secondary text-foreground border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-400/50"
+                  />
+                </div>
+                <span className="text-muted-foreground mt-5">vs</span>
+                <div className="flex-1">
+                  <label className="text-xs text-muted-foreground block mb-1">Compare To</label>
+                  <input
+                    type="date"
+                    value={date2}
+                    onChange={(e) => setDate2(e.target.value)}
+                    disabled={refreshing}
+                    className="w-full px-2 py-1.5 bg-secondary text-foreground border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-400/50"
+                  />
+                </div>
+                <button
+                  onClick={handleCompare}
+                  disabled={refreshing || !date1 || !date2}
+                  className="mt-5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Go
+                </button>
+              </div>
+
+              {comparisonInfo?.date1 && comparisonInfo?.date2 && (
+                <div className="text-xs text-muted-foreground mt-2">
+                  Comparing week of {comparisonInfo.date1} vs {comparisonInfo.date2}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4 flex-1">
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="text-sm text-muted-foreground mb-1">Total Signals</div>
+              <div className="text-2xl font-bold">{stats.total}</div>
+            </div>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="text-sm text-muted-foreground mb-1">High Priority</div>
+              <div className="text-2xl font-bold text-red-400">{stats.highPriority}</div>
+            </div>
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="text-sm text-muted-foreground mb-1">Last Updated</div>
+              <div className="text-lg font-semibold">
+                {lastUpdated ? lastUpdated.toLocaleString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit'
+                }) : '-'}
+              </div>
             </div>
           </div>
         </div>
@@ -1087,14 +1229,10 @@ function SignalsView({ onBack, config, toolName }) {
 
 // Spend Analysis Component
 function SpendAnalysis({ onBack, config, toolName }) {
-  const chartRef = useRef(null)
   const [lagMonths, setLagMonths] = useState(0)
   const [dataBySource, setDataBySource] = useState({}) // { sourceId: { name, data: [...] } }
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState('matrix') // Start with matrix (chart needs refactoring)
-  const [selectedInput, setSelectedInput] = useState('totalSpend') // Input variable selection
-  const [visibleMetrics, setVisibleMetrics] = useState({}) // { metricId: boolean } for chart filtering
-  const [useLogScale, setUseLogScale] = useState(false) // Log scale toggle for chart
+  const [viewMode, setViewMode] = useState('matrix') // matrix, regression, mlImportance
 
   // Keyboard navigation support (Vim keybindings)
   useEffect(() => {
@@ -1171,35 +1309,57 @@ function SpendAnalysis({ onBack, config, toolName }) {
     return variables
   }, [dataBySource, allMonths])
 
-  // Initialize visible metrics when inputOptions change
-  useEffect(() => {
-    if (inputOptions.length > 0 && Object.keys(visibleMetrics).length === 0) {
-      const initial = {}
-      inputOptions.forEach(v => {
-        initial[v.id] = true // All visible by default
-      })
-      setVisibleMetrics(initial)
-    }
-  }, [inputOptions, visibleMetrics])
+  // Check if we're in browser mode
+  const isBrowserMode = !window.electronAPI?.terminal
 
   // Load all data sources dynamically from config
   useEffect(() => {
     async function loadData() {
-      if (!window.electronAPI?.mediatrader || !config) return
+      if (!config) return
 
       try {
         const allSources = [...config.channels, ...config.conversionSources].filter(s => s.enabled)
         console.log(`📊 MediaTrader: Loading ${allSources.length} data sources from config`)
 
-        const results = await Promise.all(
-          allSources.map(async (source) => {
-            const data = await window.electronAPI.mediatrader.queryDataSource({
-              sourceId: source.id,
-              options: { aggregation: source.costField ? 'sum' : (source.valueField ? 'sum' : 'count') }
+        let results
+
+        if (isBrowserMode) {
+          // Browser mode: use server API
+          results = await Promise.all(
+            allSources.map(async (source) => {
+              try {
+                const res = await fetch('http://localhost:3000/api/mediatrader/query', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    sourceId: source.id,
+                    options: { aggregation: source.costField ? 'sum' : (source.valueField ? 'sum' : 'count') }
+                  })
+                })
+                const data = await res.json()
+                return { id: source.id, name: source.name, data, source }
+              } catch (err) {
+                console.error(`Error loading ${source.id}:`, err)
+                return { id: source.id, name: source.name, data: [], source }
+              }
             })
-            return { id: source.id, name: source.name, data, source }
-          })
-        )
+          )
+        } else if (window.electronAPI?.mediatrader) {
+          // Electron mode: use IPC
+          results = await Promise.all(
+            allSources.map(async (source) => {
+              const data = await window.electronAPI.mediatrader.queryDataSource({
+                sourceId: source.id,
+                options: { aggregation: source.costField ? 'sum' : (source.valueField ? 'sum' : 'count') }
+              })
+              return { id: source.id, name: source.name, data, source }
+            })
+          )
+        } else {
+          console.warn('No data loading method available')
+          setLoading(false)
+          return
+        }
 
         // Build dataBySource object
         const dataMap = {}
@@ -1221,142 +1381,7 @@ function SpendAnalysis({ onBack, config, toolName }) {
       }
     }
     loadData()
-  }, [config])
-
-  // Chart view disabled - correlation calculation and chart rendering removed
-  // TODO: Refactor for config-driven data when re-enabling chart view
-
-  // Chart rendering - simple multi-line chart showing all variables with dual Y-axes
-  useEffect(() => {
-    if (viewMode !== 'chart' || !chartRef.current || inputOptions.length === 0) return
-
-    console.log('📊 Chart View - All Months:', allMonths)
-    console.log('📊 Chart View - Input Options:', inputOptions.map(v => ({ label: v.label, dataPoints: v.data.length })))
-
-    // Filter to only visible metrics
-    const visibleVariables = inputOptions.filter(v => visibleMetrics[v.id])
-
-    if (visibleVariables.length === 0) {
-      chartRef.current.innerHTML = '<div class="text-center text-muted-foreground py-8">No metrics selected. Please select at least one metric to display.</div>'
-      return
-    }
-
-    // Categorize variables into monetary vs count types
-    const isMonetary = (label) => {
-      const lowerLabel = label.toLowerCase()
-      return lowerLabel.includes('spend') ||
-             lowerLabel.includes('revenue') ||
-             lowerLabel.includes('cost') ||
-             lowerLabel.includes('amount')
-    }
-
-    // Build series with proper Y-axis assignments
-    const series = []
-    const colors = ['#4ade80', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#fbbf24', '#fb923c', '#f87171', '#06b6d4', '#a78bfa', '#f472b6', '#fb7185', '#fcd34d', '#34d399', '#60a5fa', '#c084fc']
-
-    // Track which series use which axes for proper configuration
-    let hasMonetary = false
-    let hasCounts = false
-
-    visibleVariables.forEach((variable, idx) => {
-      const isMoney = isMonetary(variable.label)
-
-      series.push({
-        name: variable.label,
-        type: 'line',
-        data: variable.data,
-        yAxisIndex: isMoney ? 0 : 1  // 0 = left (dollars), 1 = right (counts)
-      })
-
-      if (isMoney) hasMonetary = true
-      else hasCounts = true
-    })
-
-    // Build Y-axis configurations
-    const yaxisConfig = []
-
-    // Calculate dynamic chart height based on legend items (25px per item, min 500px, max 1200px)
-    const calculatedHeight = Math.max(500, Math.min(1200, 300 + (visibleVariables.length * 25)))
-
-    // Add left Y-axis for monetary values if any exist
-    if (hasMonetary) {
-      yaxisConfig.push({
-        logarithmic: useLogScale,
-        title: {
-          text: useLogScale ? 'Dollars ($) - Log Scale' : 'Dollars ($)',
-          style: { color: '#9ca3af', fontSize: '12px' }
-        },
-        labels: {
-          style: { colors: '#9ca3af' },
-          formatter: (val) => val != null ? `$${Math.round(val)}` : '$0'
-        }
-      })
-    }
-
-    // Add right Y-axis for counts if any exist
-    if (hasCounts) {
-      yaxisConfig.push({
-        logarithmic: useLogScale,
-        opposite: true,
-        title: {
-          text: useLogScale ? 'Count - Log Scale' : 'Count',
-          style: { color: '#9ca3af', fontSize: '12px' }
-        },
-        labels: {
-          style: { colors: '#9ca3af' },
-          formatter: (val) => val != null ? Math.round(val).toString() : '0'
-        }
-      })
-    }
-
-    const options = {
-      chart: {
-        type: 'line',
-        height: calculatedHeight,
-        background: 'transparent',
-        toolbar: { show: false }
-      },
-      theme: { mode: 'dark' },
-      series,
-      colors: colors,
-      xaxis: {
-        categories: allMonths,
-        labels: {
-          style: { colors: '#9ca3af' },
-          rotate: -45,
-          rotateAlways: false
-        }
-      },
-      yaxis: yaxisConfig,
-      stroke: { width: 2, curve: 'smooth' },
-      legend: {
-        position: 'right',
-        labels: { colors: '#9ca3af' }
-      },
-      tooltip: {
-        theme: 'dark',
-        shared: true,
-        intersect: false,
-        y: {
-          formatter: (val, opts) => {
-            // Check if this series uses monetary axis (yAxisIndex 0)
-            const series = opts.w.config.series[opts.seriesIndex]
-            if (series && series.yAxisIndex === 0) {
-              return `$${Math.round(val)}`
-            } else {
-              return Math.round(val).toString()
-            }
-          }
-        }
-      }
-    }
-
-    chartRef.current.innerHTML = ''
-    const chart = new ApexCharts(chartRef.current, options)
-    chart.render()
-
-    return () => chart.destroy()
-  }, [viewMode, inputOptions, allMonths, visibleMetrics, useLogScale])
+  }, [config, isBrowserMode])
 
   // Get correlation color
   const getCorrelationColor = (corr) => {
@@ -1399,16 +1424,6 @@ function SpendAnalysis({ onBack, config, toolName }) {
 
           {/* View Toggle */}
           <div className="flex gap-2">
-            <button
-              onClick={() => setViewMode('chart')}
-              className={`px-3 py-1 text-sm rounded transition-colors ${
-                viewMode === 'chart'
-                  ? 'bg-green-400/20 text-green-400 border border-green-400'
-                  : 'bg-secondary text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Chart
-            </button>
             <button
               onClick={() => setViewMode('matrix')}
               className={`px-3 py-1 text-sm rounded transition-colors ${
@@ -1479,103 +1494,7 @@ function SpendAnalysis({ onBack, config, toolName }) {
           </div>
         )}
 
-        {viewMode === 'chart' ? (
-          <div className="space-y-4">
-            {/* Chart Controls */}
-            <div className="bg-card border border-border rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-semibold mb-1">Chart Controls</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Filter metrics and adjust scale to improve chart readability
-                  </p>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useLogScale}
-                    onChange={(e) => setUseLogScale(e.target.checked)}
-                    className="w-4 h-4 rounded border-border bg-secondary"
-                  />
-                  <span className="text-sm font-medium">Logarithmic Scale</span>
-                </label>
-              </div>
-
-              {/* Metric Filters - Grouped by Type in Columns */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium">Visible Metrics</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        const all = {}
-                        inputOptions.forEach(v => { all[v.id] = true })
-                        setVisibleMetrics(all)
-                      }}
-                      className="text-xs text-green-400 hover:underline"
-                    >
-                      Select All
-                    </button>
-                    <span className="text-muted-foreground">|</span>
-                    <button
-                      onClick={() => {
-                        const none = {}
-                        inputOptions.forEach(v => { none[v.id] = false })
-                        setVisibleMetrics(none)
-                      }}
-                      className="text-xs text-red-400 hover:underline"
-                    >
-                      Deselect All
-                    </button>
-                  </div>
-                </div>
-
-                {/* Group variables by type - Multi-column layout */}
-                {(() => {
-                  const groups = groupVariables(inputOptions)
-                  return (
-                    <div className="grid grid-cols-5 gap-4">
-                      {Object.entries(groups).filter(([_, vars]) => vars.length > 0).map(([groupName, variables]) => (
-                        <div key={groupName} className="space-y-1.5">
-                          <div className="text-xs font-bold text-muted-foreground pb-1 border-b border-border">
-                            {groupName}
-                          </div>
-                          {variables.map(variable => (
-                            <label key={variable.id} className="flex items-start gap-1.5 cursor-pointer group">
-                              <input
-                                type="checkbox"
-                                checked={visibleMetrics[variable.id] || false}
-                                onChange={(e) => setVisibleMetrics(prev => ({
-                                  ...prev,
-                                  [variable.id]: e.target.checked
-                                }))}
-                                className="w-3.5 h-3.5 mt-0.5 rounded border-border bg-secondary flex-shrink-0"
-                              />
-                              <span className="text-xs leading-tight group-hover:text-foreground text-muted-foreground">
-                                {variable.label}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )
-                })()}
-              </div>
-            </div>
-
-            {/* Chart Display */}
-            <div className="bg-card border border-border rounded-lg p-6">
-              <div className="mb-4">
-                <h3 className="text-base font-semibold">All Variables Over Time</h3>
-                <p className="text-xs text-muted-foreground">
-                  Visual comparison of selected metrics. Use filters above to reduce clutter.
-                </p>
-              </div>
-              <div ref={chartRef}></div>
-            </div>
-          </div>
-        ) : viewMode === 'matrix' ? (
+        {viewMode === 'matrix' ? (
           <MatrixView
             allVariables={inputOptions}
             lagMonths={lagMonths}
@@ -1859,405 +1778,399 @@ function MediaMixModeling({ onBack, roasData, summary }) {
   )
 }
 
-// Media Correlation - COAS Analysis
+// Media Correlation - Cost Per Outcome Analysis
 function MediaCorrelation({ onBack, config, toolName }) {
-  const [roasData, setRoasData] = useState(null)
-  const [summary, setSummary] = useState(null)
+  const [coasData, setCoasData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [selectedChannel, setSelectedChannel] = useState('all') // Default to all channels
-  const [dateRange, setDateRange] = useState('12m') // all, 12m, 24m, 36m, custom
-  const [customStartDate, setCustomStartDate] = useState('')
-  const [customEndDate, setCustomEndDate] = useState('')
+  const [selectedChannel, setSelectedChannel] = useState('totalSpend')
+  const [dateRange, setDateRange] = useState('24m')
+  const [customStartDate, setCustomStartDate] = useState('2023-01-01')
+  const [customEndDate, setCustomEndDate] = useState(new Date().toISOString().split('T')[0])
+  const [campaignCategory, setCampaignCategory] = useState('b2b') // 'all' or 'b2b'
+  const [campaignType, setCampaignType] = useState('all') // 'all', 'video', 'search'
   const [isLoadingData, setIsLoadingData] = useState(false)
-  const [useLag, setUseLag] = useState(false) // Default to no lag for simpler view
 
   // Calculate date range for API call
   const getDateRange = () => {
-    const today = new Date('2025-11-30') // Using latest data date
-    const ranges = {
-      '12m': [new Date(today.getFullYear() - 1, today.getMonth(), 1), today],
-      '24m': [new Date(today.getFullYear() - 2, today.getMonth(), 1), today],
-      '36m': [new Date(today.getFullYear() - 3, today.getMonth(), 1), today],
-      'all': [new Date('2022-01-01'), today]
-    }
+    const today = new Date()
+    const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0)
 
     if (dateRange === 'custom') {
       return [new Date(customStartDate), new Date(customEndDate)]
     }
 
+    const ranges = {
+      '12m': [new Date(today.getFullYear() - 1, today.getMonth(), 1), endDate],
+      '24m': [new Date(today.getFullYear() - 2, today.getMonth(), 1), endDate]
+    }
+
     return ranges[dateRange]
   }
 
-  // Load ROAS data from API
+  // Load COAS data from API
   useEffect(() => {
-    async function loadROASData() {
+    async function loadCOASData() {
       setIsLoadingData(true)
       try {
         const [start, end] = getDateRange()
         const startDateStr = start.toISOString().split('T')[0]
         const endDateStr = end.toISOString().split('T')[0]
 
-        const response = await fetch(`http://localhost:3000/api/media-correlation/roas?startDate=${startDateStr}&endDate=${endDateStr}&useLag=${useLag}`)
+        // Build URL with optional campaign filters
+        let url = `http://localhost:3000/api/media-correlation/coas?startDate=${startDateStr}&endDate=${endDateStr}`
+        if (campaignCategory === 'b2b') {
+          url += '&campaignFilter=%25B2B%25,%25SMB%25'
+        }
+        if (campaignType !== 'all') {
+          url += `&campaignTypeFilter=${encodeURIComponent(campaignType)}`
+        }
+
+        const response = await fetch(url)
 
         if (!response.ok) {
-          throw new Error('Failed to fetch ROAS data')
+          throw new Error('Failed to fetch COAS data')
         }
 
         const result = await response.json()
-        setRoasData(result.data)
-        setSummary(result.summary)
+        setCoasData(result.data)
         setLoading(false)
         setIsLoadingData(false)
       } catch (error) {
-        console.error('Error loading ROAS data:', error)
+        console.error('Error loading COAS data:', error)
         setLoading(false)
         setIsLoadingData(false)
       }
     }
 
-    if (dateRange === 'custom' && (!customStartDate || !customEndDate)) {
-      // Don't load if custom range selected but dates not set
-      return
-    }
-
-    loadROASData()
-  }, [dateRange, customStartDate, customEndDate, useLag])
+    loadCOASData()
+  }, [dateRange, campaignCategory, campaignType, customStartDate, customEndDate])
 
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-muted-foreground">Loading ROAS data...</div>
+        <div className="text-muted-foreground">Loading cost data...</div>
       </div>
     )
   }
 
-  if (!roasData) {
+  if (!coasData) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-red-400">Failed to load ROAS data</div>
+        <div className="text-red-400">Failed to load data</div>
       </div>
     )
   }
 
-  const formatCurrency = (value) => {
+  const formatCurrency = (value, decimals = 0) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
     }).format(value)
   }
 
-  // Get channel data based on selection
-  const channelData = selectedChannel === 'all' ? roasData : { [selectedChannel]: roasData[selectedChannel] }
-  const pipelines = ['New Deals', 'Renewal Deals', 'Expansion Deals']
-
-  // Use summary data from API (avoids double-counting deals/revenue across channels)
-  // Filter spend by channel if a specific channel is selected
-  let totalSpend = 0
-  let totalRevenue = summary?.totalRevenue || 0
-  let totalDeals = summary?.totalDeals || 0
-  let totalRoas = 0
-
-  if (selectedChannel === 'all') {
-    // Sum spend across all channels
-    totalSpend = summary?.totalSpend || 0
-    // Calculate average ROAS across all channel/pipeline combinations
-    let roasSum = 0
-    let roasCount = 0
-    Object.values(roasData).forEach(channelPipelines => {
-      Object.values(channelPipelines).forEach(metrics => {
-        roasSum += metrics.roas
-        roasCount++
-      })
-    })
-    totalRoas = roasCount > 0 ? roasSum / roasCount : 0
-  } else {
-    // Get spend for the selected channel only (from first pipeline since spend is channel-level)
-    const channelPipelines = roasData[selectedChannel]
-    if (channelPipelines) {
-      const firstPipeline = Object.values(channelPipelines)[0]
-      totalSpend = firstPipeline?.spend || 0
-      // Calculate average ROAS for this channel's pipelines
-      let roasSum = 0
-      let roasCount = 0
-      Object.values(channelPipelines).forEach(metrics => {
-        roasSum += metrics.roas
-        roasCount++
-      })
-      totalRoas = roasCount > 0 ? roasSum / roasCount : 0
-    }
-  }
-
-  // Calculate top performer from individual channel/pipeline combinations
-  let topRoas = 0
-  let topChannel = ''
-  let topPipeline = ''
-  let maxMonths = 0
-
-  Object.entries(roasData).forEach(([channel, pipelines]) => {
-    Object.entries(pipelines).forEach(([pipeline, metrics]) => {
-      maxMonths = Math.max(maxMonths, metrics.months)
-
-      if (metrics.roas > topRoas) {
-        topRoas = metrics.roas
-        topChannel = channel
-        topPipeline = pipeline
-      }
-    })
-  })
-
   const channelNames = {
-    'google-ads': 'Google Ads',
-    'bing-ads': 'Bing Ads',
-    'facebook-ads': 'Facebook Ads'
+    'totalSpend': 'All Channels',
+    'google': 'Google Ads',
+    'bing': 'Bing Ads',
+    'facebook': 'Facebook Ads'
   }
 
-  // Get date range label
-  const getDateRangeLabel = () => {
-    if (dateRange === 'custom' && customStartDate && customEndDate) {
-      const start = new Date(customStartDate)
-      const end = new Date(customEndDate)
-      const months = Math.round((end - start) / (1000 * 60 * 60 * 24 * 30))
-      return `${months} months`
-    }
-
-    const labels = {
-      'all': '47 months',
-      '36m': '36 months',
-      '24m': '24 months',
-      '12m': '12 months',
-      'custom': 'Custom'
-    }
-    return labels[dateRange]
+  // Icon and unit mappings for outcomes
+  const outcomeIcons = {
+    'meetingsCreated': '📆',
+    'meetingsCompleted': '📅',
+    'dealsCreated': '🤝',
+    'dealsWon': '🏆',
+    'newDealRevenue': '💰',
+    'expansionDealRevenue': '📈',
+    'renewalDealRevenue': '🔄',
+    'totalRevenue': '💵',
+    'businessAccounts': '🏢',
+    'userAccounts': '👤',
+    'businessCreated': '✨',
+    'brandedSearch': '🔍',
+    'organicSearch': '🌐',
+    'directTraffic': '📍'
   }
 
-  const getDateRangePeriod = () => {
-    if (dateRange === 'custom' && customStartDate && customEndDate) {
-      return `${customStartDate.substring(0, 7)} → ${customEndDate.substring(0, 7)}`
-    }
-
-    const periods = {
-      'all': '2022-01 → 2025-11',
-      '36m': '2022-11 → 2025-11',
-      '24m': '2023-11 → 2025-11',
-      '12m': '2024-11 → 2025-11',
-      'custom': 'Select dates'
-    }
-    return periods[dateRange]
+  const outcomeUnits = {
+    'meetingsCreated': 'meeting',
+    'meetingsCompleted': 'meeting',
+    'dealsCreated': 'deal',
+    'dealsWon': 'deal',
+    'newDealRevenue': 'revenue',
+    'expansionDealRevenue': 'revenue',
+    'renewalDealRevenue': 'revenue',
+    'totalRevenue': 'revenue',
+    'businessAccounts': 'account',
+    'userAccounts': 'user',
+    'businessCreated': 'business',
+    'brandedSearch': 'click',
+    'organicSearch': 'click',
+    'directTraffic': 'user'
   }
+
+  // Group outcomes by category for display
+  const outcomeGroups = {
+    'Sales Pipeline': ['meetingsCreated', 'meetingsCompleted', 'dealsCreated', 'dealsWon'],
+    'Revenue': ['newDealRevenue', 'expansionDealRevenue', 'renewalDealRevenue', 'totalRevenue'],
+    'Growth': ['businessCreated', 'businessAccounts', 'userAccounts']
+  }
+
+  // Get data for selected channel
+  const correlations = coasData.correlations?.[selectedChannel] || {}
+  const outcomes = coasData.outcomes || {}
+  const summary = coasData.summary || {}
+
+  // Get spend for selected channel
+  const channelSpend = selectedChannel === 'totalSpend'
+    ? summary.totalSpend
+    : summary.channelBreakdown?.[selectedChannel] || 0
+
+  // Get confidence label and color
+  const getConfidence = (r, significant) => {
+    const absR = Math.abs(r)
+    if (significant && absR >= 0.6) return { label: 'High', class: 'text-green-400 bg-green-400/10 border-green-400' }
+    if (significant && absR >= 0.4) return { label: 'Medium', class: 'text-yellow-400 bg-yellow-400/10 border-yellow-400' }
+    return { label: 'Low', class: 'text-zinc-400 bg-zinc-400/10 border-zinc-400' }
+  }
+
+  // Calculate cost per outcome for each metric (dynamically from API data)
+  const costPerOutcome = Object.entries(outcomes).map(([outcomeId, outcomeData]) => {
+    const corrData = correlations[outcomeId]
+
+    if (!outcomeData || !corrData?.bestCorr) return null
+
+    const totalOutcomes = outcomeData.total
+    const costPer = totalOutcomes > 0 ? channelSpend / totalOutcomes : 0
+    const { bestCorr, bestLag } = corrData
+    const confidence = getConfidence(bestCorr.r, bestCorr.significant)
+
+    return {
+      id: outcomeId,
+      name: outcomeData.name,
+      icon: outcomeIcons[outcomeId] || '📊',
+      unit: outcomeUnits[outcomeId] || 'outcome',
+      isCurrency: outcomeData.isCurrency || false,
+      costPer,
+      totalOutcomes,
+      correlation: bestCorr.r,
+      significant: bestCorr.significant,
+      lag: bestLag,
+      confidence
+    }
+  }).filter(Boolean)
+
+  // Sort by confidence (high first) then by cost
+  costPerOutcome.sort((a, b) => {
+    const confOrder = { 'High': 0, 'Medium': 1, 'Low': 2 }
+    if (confOrder[a.confidence.label] !== confOrder[b.confidence.label]) {
+      return confOrder[a.confidence.label] - confOrder[b.confidence.label]
+    }
+    return a.costPer - b.costPer
+  })
 
   return (
     <div className="h-full overflow-auto">
-      <div className="p-8 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onBack}
-                className="hover:bg-accent"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-              <h1 className="text-3xl font-bold">Media Correlation</h1>
-            </div>
-            <p className="text-muted-foreground text-sm">
-              {useLag ? 'Time-lagged correlation analysis' : 'Direct attribution (no lag)'} • NOT click-based
-            </p>
-          </div>
-
-          {/* Lag Toggle */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Lag Analysis:</span>
-            <button
-              onClick={() => setUseLag(!useLag)}
-              disabled={isLoadingData}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                useLag ? 'bg-green-400' : 'bg-border'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+      <div className="p-6">
+        {/* Compact Header Bar */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBack}
+              className="hover:bg-accent"
             >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  useLag ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-            <span className={`text-sm ${useLag ? 'text-green-400' : 'text-muted-foreground'}`}>
-              {useLag ? 'Enabled' : 'Disabled'}
-            </span>
-          </div>
-        </div>
-
-        {/* Summary Stats Bar */}
-        <div className="grid grid-cols-5 gap-4 mb-8">
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="text-xs text-muted-foreground mb-1">Analysis Period</div>
-            <div className="text-xl font-bold">{getDateRangeLabel()}</div>
-            <div className="text-xs text-muted-foreground">{getDateRangePeriod()}</div>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="text-xs text-muted-foreground mb-1">Total Spend</div>
-            <div className="text-xl font-bold">{formatCurrency(totalSpend)}</div>
-            <div className="text-xs text-muted-foreground">
-              {selectedChannel === 'all' ? 'Across all channels' : channelNames[selectedChannel]}
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold">Cost Per Outcome</h1>
+              <p className="text-muted-foreground text-xs">
+                {summary.months} months • {formatCurrency(channelSpend)} {campaignCategory === 'b2b' ? 'B2B' : 'total'}{campaignType !== 'all' ? ` ${campaignType}` : ''} spend
+              </p>
             </div>
           </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="text-xs text-muted-foreground mb-1">Total COAS</div>
-            <div className="text-xl font-bold">${totalRoas.toFixed(2)}</div>
-            <div className="text-xs text-muted-foreground">
-              {selectedChannel === 'all' ? 'Avg across channels' : channelNames[selectedChannel]}
+
+          {/* Filters - compact row */}
+          <div className="flex gap-3 items-center">
+            {/* Channel selector */}
+            <div className="flex gap-1">
+              {['totalSpend', 'google', 'bing', 'facebook'].map(channel => (
+                <button
+                  key={channel}
+                  onClick={() => setSelectedChannel(channel)}
+                  className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
+                    selectedChannel === channel
+                      ? 'bg-green-400/10 border border-green-400 text-green-400'
+                      : 'bg-card border border-border text-muted-foreground hover:border-green-400/50'
+                  }`}
+                >
+                  {channelNames[channel]}
+                </button>
+              ))}
+            </div>
+
+            <div className="w-px h-6 bg-border" />
+
+            {/* B2B / All toggle */}
+            <div className="flex gap-1 bg-muted/30 rounded-md p-0.5">
+              {[
+                { value: 'b2b', label: 'B2B' },
+                { value: 'all', label: 'All' }
+              ].map(cat => (
+                <button
+                  key={cat.value}
+                  onClick={() => setCampaignCategory(cat.value)}
+                  disabled={isLoadingData}
+                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                    campaignCategory === cat.value
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  } disabled:opacity-50`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="w-px h-6 bg-border" />
+
+            {/* Campaign Type toggle (Video/Search/All) */}
+            <div className="flex gap-1 bg-muted/30 rounded-md p-0.5">
+              {[
+                { value: 'all', label: 'All Types' },
+                { value: 'video', label: 'Video' },
+                { value: 'search', label: 'Search' }
+              ].map(type => (
+                <button
+                  key={type.value}
+                  onClick={() => setCampaignType(type.value)}
+                  disabled={isLoadingData}
+                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                    campaignType === type.value
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  } disabled:opacity-50`}
+                >
+                  {type.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Date Range */}
+            <div className="flex gap-1 items-center">
+              {[
+                { value: '24m', label: '24m' },
+                { value: '12m', label: '12m' },
+                { value: 'custom', label: 'Custom' }
+              ].map(range => (
+                <button
+                  key={range.value}
+                  onClick={() => setDateRange(range.value)}
+                  disabled={isLoadingData}
+                  className={`px-2 py-1 rounded-md text-xs transition-colors ${
+                    dateRange === range.value
+                      ? 'bg-green-400/10 border border-green-400 text-green-400'
+                      : 'bg-card border border-border text-muted-foreground hover:border-green-400/50'
+                  } disabled:opacity-50`}
+                >
+                  {range.label}
+                </button>
+              ))}
+              {dateRange === 'custom' && (
+                <>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="px-2 py-1 rounded-md text-xs bg-card border border-border text-foreground ml-2"
+                  />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="px-2 py-1 rounded-md text-xs bg-card border border-border text-foreground"
+                  />
+                </>
+              )}
             </div>
           </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="text-xs text-muted-foreground mb-1">Total Deals</div>
-            <div className="text-xl font-bold">{totalDeals.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">B2B only (HubSpot)</div>
-          </div>
-          <div className="bg-card border border-border rounded-lg p-4">
-            <div className="text-xs text-muted-foreground mb-1">Total Revenue</div>
-            <div className="text-xl font-bold">{formatCurrency(totalRevenue)}</div>
-            <div className="text-xs text-muted-foreground">B2B only (HubSpot)</div>
-          </div>
         </div>
 
-        {/* Channel and Date Range Filters */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSelectedChannel('all')}
-              className={`px-4 py-2 rounded-lg border transition-colors ${
-                selectedChannel === 'all'
-                  ? 'bg-green-400/10 border-green-400 text-green-400'
-                  : 'bg-card border-border text-muted-foreground hover:border-green-400/50'
-              }`}
-            >
-              All Channels
-            </button>
-            {Object.keys(roasData).map(channel => (
-              <button
-                key={channel}
-                onClick={() => setSelectedChannel(channel)}
-                className={`px-4 py-2 rounded-lg border transition-colors ${
-                  selectedChannel === channel
-                    ? 'bg-green-400/10 border-green-400 text-green-400'
-                    : 'bg-card border-border text-muted-foreground hover:border-green-400/50'
-                }`}
-              >
-                {channelNames[channel]}
-              </button>
-            ))}
-          </div>
+        {/* Cost Per Outcome Cards - Grouped */}
+        {Object.entries(outcomeGroups).map(([groupName, outcomeIds]) => {
+          const groupOutcomes = outcomeIds
+            .map(id => costPerOutcome.find(o => o.id === id))
+            .filter(Boolean)
 
-          <div className="flex gap-2 items-center flex-wrap">
-            <span className="text-sm text-muted-foreground">Date Range:</span>
-            {[
-              { value: 'all', label: 'All Time' },
-              { value: '36m', label: 'Last 36mo' },
-              { value: '24m', label: 'Last 24mo' },
-              { value: '12m', label: 'Last 12mo' },
-              { value: 'custom', label: 'Custom' }
-            ].map(range => (
-              <button
-                key={range.value}
-                onClick={() => setDateRange(range.value)}
-                disabled={isLoadingData}
-                className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-                  dateRange === range.value
-                    ? 'bg-green-400/10 border-green-400 text-green-400'
-                    : 'bg-card border-border text-muted-foreground hover:border-green-400/50'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {range.label}
-              </button>
-            ))}
+          if (groupOutcomes.length === 0) return null
 
-            {dateRange === 'custom' && (
-              <div className="flex gap-2 items-center ml-4">
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground"
-                  min="2022-01-01"
-                  max="2025-11-30"
-                />
-                <span className="text-muted-foreground">to</span>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="px-3 py-1.5 bg-card border border-border rounded-lg text-sm text-foreground"
-                  min="2022-01-01"
-                  max="2025-11-30"
-                />
-              </div>
-            )}
+          return (
+            <div key={groupName} className="mb-6">
+              <h2 className="text-sm font-medium mb-3 text-muted-foreground">{groupName}</h2>
+              <div className="grid grid-cols-4 gap-3">
+                {groupOutcomes.map(outcome => {
+                  // For currency outcomes (revenue), show ROAS-style ratio instead of cost per
+                  const isCurrencyOutcome = outcome.isCurrency
+                  const displayValue = isCurrencyOutcome
+                    ? (outcome.totalOutcomes / channelSpend).toFixed(2)
+                    : formatCurrency(outcome.costPer)
+                  const displayLabel = isCurrencyOutcome
+                    ? `return per $1`
+                    : `per ${outcome.unit}`
+                  const totalDisplay = isCurrencyOutcome
+                    ? formatCurrency(outcome.totalOutcomes)
+                    : outcome.totalOutcomes.toLocaleString()
 
-            {isLoadingData && (
-              <span className="text-sm text-muted-foreground ml-2">Loading...</span>
-            )}
-          </div>
-        </div>
+                  return (
+                    <div key={outcome.id} className="bg-card border border-border rounded-lg p-3">
+                      {/* Header: Icon + Name */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="text-lg">{outcome.icon}</div>
+                        <div className="text-xs font-medium truncate">{outcome.name}</div>
+                      </div>
 
-        {/* COAS Cards Grid */}
-        <div className="grid grid-cols-2 gap-6 mb-8">
-          {pipelines.map(pipeline => {
-            // For "all channels", aggregate metrics across all channels
-            let metrics
-            if (selectedChannel === 'all') {
-              // Calculate average ROAS and sum spend/revenue/deals across all channels for this pipeline
-              const channels = Object.keys(roasData)
-              const pipelineMetrics = channels.map(ch => roasData[ch][pipeline])
+                      {/* Main metric */}
+                      <div className="mb-1">
+                        <div className="text-xl font-bold">
+                          {isCurrencyOutcome ? `$${displayValue}` : displayValue}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">{displayLabel}</div>
+                      </div>
 
-              metrics = {
-                roas: pipelineMetrics.reduce((sum, m) => sum + m.roas, 0) / pipelineMetrics.length,
-                revenue: pipelineMetrics[0].revenue, // Same across all channels
-                spend: pipelineMetrics.reduce((sum, m) => sum + m.spend, 0), // Sum across channels
-                deals: pipelineMetrics[0].deals, // Same across all channels
-                lag: Math.round(pipelineMetrics.reduce((sum, m) => sum + m.lag, 0) / pipelineMetrics.length),
-                confidence: pipelineMetrics[0].confidence, // Use first channel's confidence
-                confScore: Math.round(pipelineMetrics.reduce((sum, m) => sum + m.confScore, 0) / pipelineMetrics.length)
-              }
-            } else {
-              metrics = roasData[selectedChannel][pipeline]
-            }
+                      {/* Stats row */}
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-2">
+                        <span>{totalDisplay} total</span>
+                        <span>{outcome.lag === 0 ? '0mo' : `${outcome.lag}mo`} lag</span>
+                      </div>
 
-            const confidenceClass =
-              metrics.confidence === 'high' ? 'bg-green-400/10 border-green-400 text-green-400' :
-              metrics.confidence === 'medium' ? 'bg-yellow-400/10 border-yellow-400 text-yellow-400' :
-              'bg-red-400/10 border-red-400 text-red-400'
-
-            return (
-              <div key={pipeline} className="bg-card border border-border rounded-lg p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="text-sm text-muted-foreground font-medium">{pipeline}</div>
-                  <div className={`px-2 py-1 rounded text-xs border ${confidenceClass}`}>
-                    {metrics.confidence.toUpperCase()} {metrics.confScore}%
-                  </div>
-                </div>
-                <div className="text-4xl font-bold mb-4">
-                  ${metrics.roas.toFixed(2)} <span className="text-base font-normal text-muted-foreground">COAS</span>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Spend:</span>
-                    <span className="font-medium">{formatCurrency(metrics.spend)}</span>
-                  </div>
-                  {useLag && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Optimal Lag:</span>
-                      <span className="font-medium">{metrics.lag} months</span>
+                      {/* Confidence badge */}
+                      <div className="pt-2 border-t border-border flex items-center">
+                        <div className={`inline-block px-1.5 py-0.5 rounded text-[10px] border ${outcome.confidence.class}`}>
+                          {outcome.confidence.label}
+                        </div>
+                        {outcome.correlation > 0 ? (
+                          <span className="text-[10px] text-green-400 ml-2">+{outcome.correlation.toFixed(2)}</span>
+                        ) : (
+                          <span className="text-[10px] text-red-400 ml-2">{outcome.correlation.toFixed(2)}</span>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
+                  )
+                })}
               </div>
-            )
-          })}
+            </div>
+          )
+        })}
+
+        {/* Note about confidence */}
+        <div className="mt-4 p-3 bg-muted/30 rounded-lg text-xs text-muted-foreground">
+          <strong>Confidence:</strong> High = strong correlation (r ≥ 0.6, p &lt; 0.05). Low = weak/inconsistent relationship.
         </div>
       </div>
     </div>

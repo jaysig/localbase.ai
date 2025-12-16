@@ -8,6 +8,10 @@
 import express from 'express';
 import { join, dirname, basename, normalize } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+// Enable require() for CommonJS modules
+const require = createRequire(import.meta.url);
 import { VizRegistry } from '../viz/registry.js';
 import { unlinkSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import cors from 'cors';
@@ -145,70 +149,44 @@ app.get('/api/marketing-spend', (req, res) => {
 });
 
 /**
- * GET /api/media-correlation/roas
- * Run ROAS analysis for a specific date range
- * ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&useLag=true|false
+ * GET /api/media-correlation/coas
+ * Run COAS (Correlation on Ad Spend) analysis for a specific date range
+ * Unlike traditional ROAS, COAS analyzes correlations between ad spend and outcomes
+ * ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&campaignFilter=%25B2B%25
  */
-app.get('/api/media-correlation/roas', async (req, res) => {
-  const { startDate, endDate, useLag } = req.query;
+app.get('/api/media-correlation/coas', async (req, res) => {
+  const { startDate = '2024-01-01', endDate = '2025-12-31', campaignFilter = null, campaignTypeFilter = null } = req.query;
 
-  if (!startDate || !endDate) {
-    return res.status(400).json({
-      success: false,
-      error: 'startDate and endDate query parameters required'
-    });
-  }
-
-  const useLagBool = useLag !== 'false'; // Default to true
-
-  console.log(`📊 ROAS analysis request: ${startDate} to ${endDate} (lag: ${useLagBool})`);
+  const filterInfo = [
+    campaignFilter ? `filter: ${campaignFilter}` : '',
+    campaignTypeFilter ? `type: ${campaignTypeFilter}` : ''
+  ].filter(Boolean).join(', ');
+  console.log(`📊 COAS analysis request: ${startDate} to ${endDate}${filterInfo ? ` (${filterInfo})` : ''}`);
 
   try {
-    // Import and run the analysis from current workspace
-    const analysisPath = join(currentWorkspace, 'projects/lead-lag-indicator/analysis/run-roas-by-date-range.js');
-    const { runROASByDateRange } = await import(analysisPath);
-    const results = runROASByDateRange(startDate, endDate, useLagBool);
+    // Import and run the COAS analysis from current workspace
+    const analysisPath = join(currentWorkspace, 'projects/lead-lag-indicator/analysis/run-coas-analysis.cjs');
 
-    // Calculate totals
-    // Note: totalSpend sums across channels (each channel has different spend)
-    // But each pipeline within a channel has the SAME spend (spend is channel-level, not pipeline-level)
-    // So we only sum the first pipeline's spend for each channel
-    // totalRevenue and totalDeals should NOT be summed across channels (same deals attributed to all channels)
-    let totalSpend = 0;
+    if (!existsSync(analysisPath)) {
+      return res.status(404).json({
+        success: false,
+        error: 'COAS analysis script not found'
+      });
+    }
 
-    Object.values(results).forEach(channelData => {
-      // Only take spend from first pipeline (all pipelines in a channel have same spend)
-      const firstPipeline = Object.values(channelData)[0];
-      if (firstPipeline) {
-        totalSpend += firstPipeline.spend;
-      }
-    });
+    // Use require for CommonJS module (clear cache to pick up changes)
+    delete require.cache[require.resolve(analysisPath)];
+    const { runCOASAnalysis } = require(analysisPath);
+    const results = runCOASAnalysis(startDate, endDate, currentWorkspace, campaignFilter, campaignTypeFilter);
 
-    // Get actual revenue and deal count from first channel (they're all the same)
-    const firstChannel = Object.values(results)[0];
-    let actualRevenue = 0;
-    let actualDeals = 0;
-
-    Object.values(firstChannel).forEach(metrics => {
-      actualRevenue += metrics.revenue;
-      actualDeals += metrics.deals;
-    });
-
-    console.log(`✅ ROAS analysis complete: $${actualRevenue.toFixed(0)} revenue, ${actualDeals} deals, $${totalSpend.toFixed(0)} spend`);
+    console.log(`✅ COAS analysis complete: ${results.summary.months} months, $${results.summary.totalSpend.toLocaleString()} total spend`);
 
     res.json({
       success: true,
-      data: results,
-      summary: {
-        totalSpend,
-        totalRevenue: actualRevenue,
-        totalDeals: actualDeals,
-        startDate,
-        endDate
-      }
+      data: results
     });
   } catch (error) {
-    console.error(`❌ ROAS analysis error:`, error);
+    console.error(`❌ COAS analysis error:`, error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -1359,19 +1337,30 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
       return res.status(404).json({ success: false, error: `Data source '${id}' not found` });
     }
 
-    if (!source.sync_script) {
-      return res.status(400).json({ success: false, error: `Data source '${id}' has no sync_script configured` });
+    // Support both sync_script and update_command
+    const syncCommand = source.sync_script || source.update_command;
+    if (!syncCommand) {
+      return res.status(400).json({ success: false, error: `Data source '${id}' has no sync_script or update_command configured` });
     }
 
-    // Run the sync script
-    const syncScript = join(currentWorkspace, source.sync_script);
-    if (!existsSync(syncScript)) {
-      return res.status(404).json({ success: false, error: `Sync script not found: ${source.sync_script}` });
+    // Handle full command (e.g., "node connectors/hubspot/sync-deals.js") or just script path
+    let scriptPath, command;
+    if (syncCommand.startsWith('node ')) {
+      scriptPath = syncCommand.replace('node ', '');
+      command = syncCommand;
+    } else {
+      scriptPath = syncCommand;
+      command = `node "${syncCommand}"`;
     }
 
-    console.log(`🔄 Running sync for ${id}: node ${syncScript}`);
+    const fullScriptPath = join(currentWorkspace, scriptPath);
+    if (!existsSync(fullScriptPath)) {
+      return res.status(404).json({ success: false, error: `Sync script not found: ${scriptPath}` });
+    }
 
-    const output = execSync(`node "${syncScript}"`, {
+    console.log(`🔄 Running sync for ${id}: ${command}`);
+
+    const output = execSync(command, {
       cwd: currentWorkspace,
       encoding: 'utf-8',
       timeout: 300000, // 5 minute timeout
@@ -1400,6 +1389,9 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
 /**
  * POST /api/signals/refresh
  * Regenerate the signals data by running query-signals.cjs
+ * Query params:
+ *   - weeks: number of weeks ago to compare (e.g., ?weeks=2 compares 2 weeks ago vs 3 weeks ago)
+ *   - date1 & date2: compare specific date ranges (e.g., ?date1=2025-12-08&date2=2025-12-01)
  */
 app.post('/api/signals/refresh', async (req, res) => {
   try {
@@ -1409,9 +1401,20 @@ app.post('/api/signals/refresh', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Signals script not found' });
     }
 
-    console.log(`🔄 Refreshing signals data...`);
+    // Build command with optional parameters
+    let command = `node "${signalsScript}"`;
+    const { weeks, date1, date2 } = req.query;
 
-    const output = execSync(`node "${signalsScript}"`, {
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (date1 && date2 && datePattern.test(date1) && datePattern.test(date2)) {
+      command += ` --date1 ${date1} --date2 ${date2}`;
+    } else if (weeks && !isNaN(parseInt(weeks, 10))) {
+      command += ` --weeks ${parseInt(weeks, 10)}`;
+    }
+
+    console.log(`🔄 Refreshing signals data... (${command})`);
+
+    const output = execSync(command, {
       cwd: currentWorkspace,
       encoding: 'utf-8',
       timeout: 120000, // 2 minute timeout
@@ -1724,6 +1727,33 @@ app.post('/api/mediatrader/query', (req, res) => {
       return res.json([]);
     }
 
+    // Handle JSON data sources (monthly format from admin dashboard)
+    if (source.dataSource.endsWith('.json')) {
+      const jsonPath = join(currentWorkspace, source.dataSource);
+
+      if (!existsSync(jsonPath)) {
+        console.warn(`⚠️ JSON file not found: ${jsonPath}`);
+        return res.json([]);
+      }
+
+      const jsonData = JSON.parse(readFileSync(jsonPath, 'utf-8'));
+
+      // Handle json-monthly format (e.g., business-signups-monthly.json)
+      if (source.dateFormat === 'json-monthly' && jsonData.monthly) {
+        const results = Object.entries(jsonData.monthly).map(([month, value]) => ({
+          month,
+          value: typeof value === 'number' ? value : parseInt(value, 10)
+        })).sort((a, b) => a.month.localeCompare(b.month));
+
+        console.log(`✅ MediaTrader: Got ${results.length} rows for "${sourceId}" (JSON monthly)`);
+        return res.json(results);
+      }
+
+      // Fallback: return empty if format not recognized
+      console.warn(`⚠️ Unknown JSON format for "${sourceId}"`);
+      return res.json([]);
+    }
+
     // Handle CSV data sources
     if (source.dataSource.endsWith('.csv')) {
       const { startDate = '2024-01-01', endDate = '2025-12-31' } = options;
@@ -1882,6 +1912,19 @@ app.get('/health', (req, res) => {
  */
 app.use('/viz', (req, res, next) => {
   express.static(vizDir, {
+    setHeaders: (res, path) => {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  })(req, res, next);
+});
+
+/**
+ * Serve data files from workspace data/ directory
+ * Used by visualizations to load SQLite databases client-side
+ */
+app.use('/data', (req, res, next) => {
+  const dataDir = join(currentWorkspace, 'data');
+  express.static(dataDir, {
     setHeaders: (res, path) => {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
