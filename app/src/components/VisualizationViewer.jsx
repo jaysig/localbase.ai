@@ -21,6 +21,12 @@ export default function VisualizationViewer() {
   const [viewMode, setViewMode] = useState(() => {
     return localStorage.getItem('viz-view-mode') || 'grid'
   })
+
+  // Get viz ID from URL on initial load
+  const getVizIdFromUrl = () => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('viz')
+  }
   const [typeFilter, setTypeFilter] = useState(() => {
     return localStorage.getItem('viz-type-filter') || 'all'
   })
@@ -101,6 +107,53 @@ export default function VisualizationViewer() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // Restore viz from URL param on initial load
+  useEffect(() => {
+    if (visualizations.length > 0 && !selectedViz) {
+      const vizId = getVizIdFromUrl()
+      if (vizId) {
+        const viz = visualizations.find(v => v.id === vizId)
+        if (viz) {
+          console.log('🔗 VisualizationViewer: Restoring viz from URL:', vizId)
+          setSelectedViz(viz)
+        }
+      }
+    }
+  }, [visualizations])
+
+  // Update URL when selectedViz changes
+  useEffect(() => {
+    const currentVizId = getVizIdFromUrl()
+    if (selectedViz && selectedViz.id !== currentVizId) {
+      // Add viz ID to URL without full page reload
+      const url = new URL(window.location.href)
+      url.searchParams.set('viz', selectedViz.id)
+      window.history.pushState({}, '', url)
+    } else if (!selectedViz && currentVizId) {
+      // Remove viz param when going back to gallery
+      const url = new URL(window.location.href)
+      url.searchParams.delete('viz')
+      window.history.pushState({}, '', url)
+    }
+  }, [selectedViz])
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      const vizId = getVizIdFromUrl()
+      if (vizId) {
+        const viz = visualizations.find(v => v.id === vizId)
+        if (viz) {
+          setSelectedViz(viz)
+        }
+      } else {
+        setSelectedViz(null)
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [visualizations])
 
   // Check localStorage on mount for viz to open from LiveWorkspace
   useEffect(() => {
