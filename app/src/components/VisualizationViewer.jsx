@@ -32,6 +32,7 @@ export default function VisualizationViewer() {
   })
   const [searchQuery, setSearchQuery] = useState('')
   const [deletingId, setDeletingId] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // viz to confirm delete
   const [iframeKey, setIframeKey] = useState(0)
   const searchInputRef = useRef(null)
 
@@ -186,14 +187,18 @@ export default function VisualizationViewer() {
     }
   }, [visualizations])
 
-  const handleDelete = async (e, viz) => {
+  const handleDeleteClick = (e, viz) => {
     e.stopPropagation() // Prevent card click
+    setDeleteConfirm(viz)
+  }
 
-    if (!confirm(`Delete "${viz.title}"?\n\nThis will permanently delete the visualization file and cannot be undone.`)) {
-      return
-    }
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return
 
+    const viz = deleteConfirm
+    setDeleteConfirm(null)
     setDeletingId(viz.id)
+
     try {
       const result = await window.electronAPI.api.deleteVisualization(viz.id)
       if (result.success) {
@@ -473,7 +478,7 @@ export default function VisualizationViewer() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                onClick={(e) => handleDelete(e, viz)}
+                onClick={(e) => handleDeleteClick(e, viz)}
                 disabled={deletingId === viz.id}
               >
                 <Trash2 className="h-4 w-4" />
@@ -556,7 +561,7 @@ export default function VisualizationViewer() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                onClick={(e) => handleDelete(e, viz)}
+                onClick={(e) => handleDeleteClick(e, viz)}
                 disabled={deletingId === viz.id}
               >
                 <Trash2 className="h-4 w-4" />
@@ -634,7 +639,7 @@ export default function VisualizationViewer() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0"
-                  onClick={(e) => handleDelete(e, viz)}
+                  onClick={(e) => handleDeleteClick(e, viz)}
                   disabled={deletingId === viz.id}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -696,7 +701,7 @@ export default function VisualizationViewer() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0"
-                        onClick={(e) => handleDelete(e, viz)}
+                        onClick={(e) => handleDeleteClick(e, viz)}
                         disabled={deletingId === viz.id}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -723,6 +728,41 @@ export default function VisualizationViewer() {
           <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>No {typeFilter} visualizations found</p>
           <p className="text-xs mt-2">Try selecting a different filter</p>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setDeleteConfirm(null)}
+          />
+
+          {/* Modal */}
+          <div className="relative bg-card border border-border rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold mb-2">Delete "{deleteConfirm.title}"?</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              This will permanently delete the visualization file and cannot be undone.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteConfirm}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
