@@ -328,17 +328,17 @@ export default function Home({ onWorkspaceSelected }) {
                         }
                       }}
                     >
-                      <CardHeader className="pb-2 px-3 pt-3">
-                        <CardTitle className="flex items-center gap-2 text-sm">
-                          <Database className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-mono">{project.name}</span>
+                      <CardHeader className="p-3">
+                        <CardTitle className="flex items-start gap-2 text-sm text-left">
+                          <Database className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                          <div className="min-w-0 text-left">
+                            <span className="font-mono block">{project.name}</span>
+                            <span className="text-xs text-muted-foreground font-mono truncate block">
+                              {project.path}
+                            </span>
+                          </div>
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="pb-2 px-3">
-                        <p className="text-xs text-muted-foreground font-mono truncate">
-                          {project.path}
-                        </p>
-                      </CardContent>
                     </Card>
                   ))}
                 </div>
