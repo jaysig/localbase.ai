@@ -2,7 +2,19 @@
 
 **Local-first analytics workspace for your business**
 
-Query your business data (QuickBooks, HubSpot, etc.) with AI. Everything runs locally on your machine.
+Query your business data with AI. Your data stays on your machine - no cloud dashboards, no SaaS subscriptions.
+
+## How It Works
+
+LocalBase runs a local web server on your machine. Your data lives in SQLite databases on your hard drive. When you open `http://localhost:5173`, you're connecting to a server running on your own computer - not a cloud service.
+
+This means:
+- Your databases stay on your machine
+- No SaaS accounts or monthly fees
+- No third-party analytics platforms seeing your data
+- You own everything
+
+**Note:** When you use AI features (Chat, Claude Code), the data you query gets sent to Claude. Claude sees whatever you ask about - not your entire database, but the specific data in your prompts and results.
 
 ## Quick Start
 
@@ -10,33 +22,33 @@ Query your business data (QuickBooks, HubSpot, etc.) with AI. Everything runs lo
 git clone https://github.com/rriggin/localbase.ai.git
 cd localbase.ai
 npm install
-./scripts/start.sh   # Or: npm run dev
+npm run dev
 ```
 
 Open http://localhost:5173
 
 ## Data Setup
 
-The `data/` folder is not included in this repo (it's gitignored). You'll need to:
+The `data/` folder contains your SQLite databases. It's gitignored (not included in the repo) because it holds your actual business data.
 
-1. **Add the data folder** - If you have the `data/` folder, copy it to your repo root
-2. **Add env.local** - Copy `env.local.example` to `env.local` and add API credentials
+To set up:
+1. Copy `env.local.example` to `env.local` and add your API credentials
+2. Run a connector to sync data: `node connectors/example/sync.js`
+3. Or ask Claude: "Help me create a connector for [service name]"
 
-The data folder contains SQLite databases for each connector. Without it, the app will run but show no data.
+## The Dashboard
 
-## Using the Web UI
-
-The LocalBase dashboard gives you:
+The web UI gives you:
 
 - **Chat** - Ask questions about your data in natural language
-- **Visualizations** - Browse and interact with charts you've created
-- **Data Sources** - See connected data and record counts
+- **Visualizations** - Browse and interact with charts
+- **Settings** - See connected data sources and sync status
 
-The chat interface can create visualizations on the fly. Ask something like "show me a chart of monthly revenue" and it will generate an interactive visualization.
+The chat can create visualizations on the fly. Ask "show me a chart of monthly revenue" and it generates an interactive chart.
 
-## Using with Claude Code (Terminal)
+## Using with Claude Code
 
-You can also work entirely from the terminal with Claude Code:
+You can also work from the terminal:
 
 ```bash
 claude   # Start Claude Code in your LocalBase directory
@@ -44,82 +56,61 @@ claude   # Start Claude Code in your LocalBase directory
 
 Then ask:
 - "Show me revenue for Q4"
-- "Create a visualization of deal pipeline by stage"
-- "Sync my HubSpot data"
+- "Create a chart of deals by stage"
+- "Sync my data"
 
-Both the web UI chat and terminal work the same way - they query your local SQLite databases and can create visualizations.
-
-## Syncing Data
-
-Ask Claude to sync your data:
-- "Sync my HubSpot deals"
-- "Update G2 analytics"
-- "Refresh all connectors"
-
-Or run sync commands directly:
-```bash
-node connectors/hubspot/sync-deals.js
-node connectors/g2-api/sync.js
-```
+Both the web chat and terminal query the same local databases.
 
 ## Creating Visualizations
 
 Ask Claude to create a visualization and it will:
-1. Create a standalone HTML file in `viz/` with embedded data queries
-2. Register it in `viz/visualizations.json` so it appears in the UI
-3. Use ApexCharts for interactive charts with tooltips, zoom, and export
+1. Create a standalone HTML file in `viz/`
+2. Register it in `viz/visualizations.json`
+3. Use ApexCharts for interactive charts
 
-Example prompts:
-- "Create a chart showing ad spend vs organic traffic over time"
-- "Build a visualization of deal pipeline by stage"
-- "Show me monthly revenue trends with a table breakdown"
+Visualizations are self-contained HTML files that query your local databases via the Express API.
 
-Visualizations are self-contained HTML files that query your local SQLite databases via the Express API.
+## Adding Connectors
 
-## Adding a New Connector
+Connectors sync data from external APIs into local SQLite databases.
 
-1. Copy the example connector:
 ```bash
 cp -R connectors/example connectors/mydata
+# Edit connectors/mydata/index.js
+node connectors/mydata/sync.js
 ```
 
-2. Add your API credentials to `env.local`:
-```bash
-cp env.local.example env.local
-# Edit env.local with your API keys
-```
+Or ask Claude: "Help me create a connector for [service name]"
 
-3. Edit `connectors/mydata/index.js` to fetch your data
-
-4. Run your connector:
-```bash
-node connectors/mydata/index.js
-```
-
-Or just ask Claude: "Help me create a connector for [service name]"
-
-See `connectors/example/README.md` for detailed examples.
-
-## What's Inside
+## Project Structure
 
 ```
 localbase.ai/
 ├── app/             # Browser UI (Vite + React)
-├── connectors/      # Your data sources
-├── tools/           # Framework (MCP server, Express API)
-├── scripts/         # Start, sync, security scripts
+├── connectors/      # Data source connectors
+├── tools/           # Express API + MCP server
+├── scripts/         # Utility scripts
 ├── viz/             # Visualization HTML files
+├── test/            # Test suite
 └── data/            # SQLite databases (gitignored)
+```
+
+## Development
+
+```bash
+npm run dev          # Start dev server (API + UI)
+npm test             # Run test suite (40 tests)
+npm start            # Start API server only
 ```
 
 ## Stack
 
-- **Node.js** - Runtime
+- **Node.js 18+** - Runtime
 - **SQLite** - Local database (better-sqlite3)
-- **Express** - Web server + API
+- **Express** - API server
 - **Vite + React** - Dashboard UI
 - **ApexCharts** - Visualizations
-- **MCP** - AI integration protocol
+- **MCP** - Claude integration protocol
 
 ## Requirements
 
