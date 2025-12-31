@@ -11,8 +11,6 @@
     "mcp": "node tools/mcp/server.js",
     "all": "npm run mcp & npm start",
     "server:watch": "node --watch tools/server/app-server.js",
-    "update-g2": "node connectors/g2-api/update.js",
-    "update-deals": "node connectors/hubspot/update.js",
     "test": "node --test test/**/*.test.js",
     "test:watch": "node --test --watch test/**/*.test.js",
     "test:coverage": "c8 --include='tools/server/**' node --test test/**/*.test.js"
@@ -44,9 +42,9 @@
     "concurrently": "^9.1.0"
   },
   "keywords": [
-    "mixpanel",
     "analytics",
-    "insights",
+    "local-first",
+    "sqlite",
     "localbase"
   ],
   "author": "Ryan",
