@@ -91,6 +91,18 @@ export const browserAPI = {
     }
   },
 
+  // Workspace management
+  workspace: {
+    async create({ workspaceName, parentDir }) {
+      const res = await fetch(`${API_BASE}/api/workspace/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceName, parentDir })
+      });
+      return res.json();
+    }
+  },
+
   // Terminal is not available in browser mode
   terminal: null,
 

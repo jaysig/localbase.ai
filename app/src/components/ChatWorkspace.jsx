@@ -337,7 +337,7 @@ export default function ChatWorkspace() {
                 className="flex-1 bg-muted rounded-lg px-3 py-[9px] text-xs leading-[18px] focus:outline-none focus:ring-1 focus:ring-primary resize-none min-h-[36px] max-h-[120px]"
                 disabled={loading}
                 rows={1}
-                style={{ height: 'auto', height: Math.min(120, Math.max(36, input.split('\n').length * 20)) + 'px' }}
+                style={{ height: Math.min(120, Math.max(36, input.split('\n').length * 20)) + 'px' }}
               />
               <button
                 onClick={sendMessage}

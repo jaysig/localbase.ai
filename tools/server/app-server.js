@@ -13,7 +13,8 @@ import { createRequire } from 'module';
 // Enable require() for CommonJS modules
 const require = createRequire(import.meta.url);
 import { VizRegistry } from '../viz/registry.js';
-import { unlinkSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
+import { unlinkSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'fs';
+import { homedir } from 'os';
 import cors from 'cors';
 import { execSync } from 'child_process';
 import {
@@ -765,6 +766,114 @@ app.post('/api/workspace/switch', (req, res) => {
     });
   } catch (error) {
     console.error('Error switching workspace:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/workspace/create
+ * Create a new workspace
+ */
+app.post('/api/workspace/create', (req, res) => {
+  try {
+    const { workspaceName, parentDir } = req.body;
+
+    if (!workspaceName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Workspace name is required'
+      });
+    }
+
+    // Sanitize workspace name - only allow alphanumeric, dash, underscore
+    const safeName = workspaceName.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid workspace name'
+      });
+    }
+
+    // Default to ~/Work if no parent specified
+    const parent = parentDir || join(homedir(), 'Work');
+    let finalName = safeName;
+    let workspacePath = join(parent, finalName);
+
+    // If folder exists, check if it's already a LocalBase workspace
+    if (existsSync(workspacePath)) {
+      const vizPath = join(workspacePath, 'viz', 'visualizations.json');
+      if (existsSync(vizPath)) {
+        // Already a LocalBase workspace
+        return res.status(400).json({
+          success: false,
+          error: 'Workspace already exists'
+        });
+      }
+      // Folder exists but not a LocalBase workspace - append suffix
+      finalName = `${safeName}-localbase`;
+      workspacePath = join(parent, finalName);
+
+      // Check if the suffixed version also exists
+      if (existsSync(workspacePath)) {
+        return res.status(400).json({
+          success: false,
+          error: `Both ${safeName} and ${finalName} already exist`
+        });
+      }
+    }
+
+    // Create workspace directory structure (full LocalBase instance)
+    mkdirSync(workspacePath, { recursive: true });
+    mkdirSync(join(workspacePath, 'viz'), { recursive: true });
+    mkdirSync(join(workspacePath, 'data'), { recursive: true });
+    mkdirSync(join(workspacePath, 'connectors'), { recursive: true });
+    mkdirSync(join(workspacePath, 'tools'), { recursive: true });
+    mkdirSync(join(workspacePath, 'scripts'), { recursive: true });
+
+    // Create empty visualizations.json
+    writeFileSync(
+      join(workspacePath, 'viz', 'visualizations.json'),
+      JSON.stringify({ visualizations: [] }, null, 2)
+    );
+
+    // Create package.json
+    writeFileSync(
+      join(workspacePath, 'package.json'),
+      JSON.stringify({
+        name: finalName,
+        version: '1.0.0',
+        type: 'module',
+        scripts: {
+          start: 'echo "Use localbase framework to run this workspace"'
+        }
+      }, null, 2)
+    );
+
+    // Create CLAUDE.md
+    writeFileSync(
+      join(workspacePath, 'CLAUDE.md'),
+      `# ${finalName}\n\nLocalBase workspace.\n\n## Data Sources\n\n(Add your data source documentation here)\n`
+    );
+
+    // Create env.local template
+    writeFileSync(
+      join(workspacePath, 'env.local'),
+      '# Add your API keys and credentials here\n'
+    );
+
+    // Switch to the new workspace
+    switchWorkspace(workspacePath);
+
+    res.json({
+      success: true,
+      workspacePath,
+      message: `Created workspace: ${finalName}`
+    });
+  } catch (error) {
+    console.error('Error creating workspace:', error);
     res.status(500).json({
       success: false,
       error: error.message

@@ -137,8 +137,9 @@ export default function Home({ onWorkspaceSelected }) {
 
     setCreating(true)
     try {
-      const home = await window.electronAPI.files.getHome()
-      const parentDir = `${home}/Work`
+      // In browser mode, files.getHome() returns null - server defaults to ~/Work
+      const home = await window.electronAPI.files?.getHome?.()
+      const parentDir = home ? `${home}/Work` : null
 
       const result = await window.electronAPI.workspace.create({
         workspaceName: newWorkspaceName.trim(),
