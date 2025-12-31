@@ -67,6 +67,19 @@ function sanitizePath(p) {
 }
 const __dirname = dirname(__filename);
 
+/**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -89,18 +102,48 @@ function getVizDir(workspace) {
 // Current viz directory
 let vizDir = getVizDir(currentWorkspace);
 
-// Middleware - Allow CORS for Electron (null origin) and regular browsers
+// Security headers middleware
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('X-Frame-Options', 'SAMEORIGIN');
+  res.header('X-Content-Type-Options', 'nosniff');
+  res.header('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// CORS - only allow localhost origins
+const allowedOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'];
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
 });
-app.use(cors());
 app.use(express.json());
+
+// Block access to sensitive files and path traversal
+const SENSITIVE_FILES = ['env.local', '.env', 'credentials.json', '.git', '.gitignore'];
+app.use((req, res, next) => {
+  const path = decodeURIComponent(req.path);
+
+  // Block path traversal
+  if (path.includes('..')) {
+    return res.status(403).json({ error: 'Path traversal not allowed' });
+  }
+
+  // Block sensitive files
+  const filename = path.split('/').pop();
+  if (SENSITIVE_FILES.some(f => filename === f || path.includes(`/${f}`))) {
+    return res.status(403).json({ error: 'Access to sensitive files not allowed' });
+  }
+
+  next();
+});
 
 // Initialize registry using viz directory at workspace root
 let registry = new VizRegistry(vizDir);
@@ -642,7 +685,7 @@ app.get('/api/viz/:id', async (req, res) => {
         <head><title>Visualization Not Found</title></head>
         <body>
           <h1>Visualization Not Found</h1>
-          <p>Visualization with ID "${id}" was not found.</p>
+          <p>Visualization with ID "${escapeHtml(id)}" was not found.</p>
           <a href="/">← Back to Dashboard</a>
         </body>
         </html>
@@ -664,7 +707,7 @@ app.get('/api/viz/:id', async (req, res) => {
       <head><title>Server Error</title></head>
       <body>
         <h1>Server Error</h1>
-        <p>Error serving visualization: ${error.message}</p>
+        <p>Error serving visualization: ${escapeHtml(error.message)}</p>
         <a href="/">← Back to Dashboard</a>
       </body>
       </html>
@@ -1518,20 +1561,33 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
  */
 app.post('/api/signals/refresh', async (req, res) => {
   try {
+    const { weeks, date1, date2 } = req.query;
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+    // Security: Validate parameters FIRST to prevent command injection
+    if (date1 || date2) {
+      if (!date1 || !date2 || !datePattern.test(date1) || !datePattern.test(date2)) {
+        return res.status(400).json({ success: false, error: 'Invalid date format. Use YYYY-MM-DD' });
+      }
+    } else if (weeks) {
+      const weeksNum = parseInt(weeks, 10);
+      if (isNaN(weeksNum) || weeksNum < 1 || weeksNum > 52) {
+        return res.status(400).json({ success: false, error: 'Invalid weeks parameter. Use 1-52' });
+      }
+    }
+
     const signalsScript = join(currentWorkspace, 'projects/mediatrader-signals/query-signals.cjs');
 
     if (!existsSync(signalsScript)) {
       return res.status(404).json({ success: false, error: 'Signals script not found' });
     }
 
-    // Build command with optional parameters
+    // Build command with validated parameters
     let command = `node "${signalsScript}"`;
-    const { weeks, date1, date2 } = req.query;
 
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-    if (date1 && date2 && datePattern.test(date1) && datePattern.test(date2)) {
+    if (date1 && date2) {
       command += ` --date1 ${date1} --date2 ${date2}`;
-    } else if (weeks && !isNaN(parseInt(weeks, 10))) {
+    } else if (weeks) {
       command += ` --weeks ${parseInt(weeks, 10)}`;
     }
 
@@ -1622,6 +1678,23 @@ app.get('/api/workspace/file', (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'path query parameter required'
+      });
+    }
+
+    // Security: Block path traversal
+    if (relativePath.includes('..')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Path traversal not allowed'
+      });
+    }
+
+    // Security: Block sensitive files
+    const filename = relativePath.split('/').pop();
+    if (SENSITIVE_FILES.some(f => filename === f || relativePath.includes(f))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access to sensitive files not allowed'
       });
     }
 
