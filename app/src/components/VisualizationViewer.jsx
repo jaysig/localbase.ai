@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { X, BarChart3, Trash2, LayoutGrid, List, Search, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import CallMetricsChart from '@/components/charts/CallMetricsChart'
 
 // Helper to build viz URLs - uses HTTP in browser mode, localbase:// in Electron
 const buildVizUrl = (vizPath) => {
@@ -278,18 +277,13 @@ export default function VisualizationViewer() {
           </Button>
         </div>
         <div className="flex-1 bg-background overflow-auto">
-          {/* Render native React charts for specific IDs */}
-          {selectedViz.id === 'kpi002' || selectedViz.id === 'call-kpi-dashboard' ? (
-            <CallMetricsChart />
-          ) : (
-            <iframe
-              key={iframeKey}
-              src={iframeUrl}
-              className="w-full h-full border-0"
-              title={selectedViz.title}
-              onLoad={() => console.log('✅ VisualizationViewer: Iframe loaded')}
-            />
-          )}
+          <iframe
+            key={iframeKey}
+            src={iframeUrl}
+            className="w-full h-full border-0"
+            title={selectedViz.title}
+            onLoad={() => console.log('✅ VisualizationViewer: Iframe loaded')}
+          />
         </div>
       </div>
     )

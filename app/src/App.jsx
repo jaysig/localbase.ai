@@ -30,14 +30,10 @@ const isBrowserMode = true
 
 // Static imports for tool components (avoiding Vite dynamic import issues)
 import MediaTrader from '@/components/tools/MediaTrader'
-import Pipeline from '@/components/crm/Pipeline'
-import Customers from '@/components/crm/Customers'
 
 // Component mapping for static imports
 const toolComponentMap = {
-  'mediatrader': MediaTrader,
-  'pipeline': Pipeline,
-  'customers': Customers
+  'mediatrader': MediaTrader
 }
 
 // Icon mapping for lucide-react icons
