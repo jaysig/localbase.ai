@@ -21,6 +21,7 @@ import Home from '@/components/Home'
 import Overview from '@/components/Overview'
 import VisualizationViewer from '@/components/VisualizationViewer'
 import ChatWorkspace from '@/components/ChatWorkspace'
+import SidebarChats from '@/components/SidebarChats'
 import { useVimiumShortcuts } from '@/hooks/useVimiumShortcuts'
 import { MessageSquare } from 'lucide-react'
 
@@ -319,24 +320,34 @@ function App() {
             }
 
             return (
-              <Button
-                key={item.id}
-                variant={selectedView === item.id ? 'secondary' : 'ghost'}
-                className={`w-full mb-1 ${
-                  sidebarCollapsed ? 'justify-center px-2' : 'justify-start'
-                }`}
-                onClick={handleClick}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleClick()
-                  }
-                }}
-              >
-                <Icon className="h-4 w-4" />
-                {!sidebarCollapsed && (
-                  <span className="ml-2">{item.label}</span>
+              <div key={item.id}>
+                <Button
+                  variant={selectedView === item.id ? 'secondary' : 'ghost'}
+                  className={`w-full mb-1 ${
+                    sidebarCollapsed ? 'justify-center px-2' : 'justify-start'
+                  }`}
+                  onClick={handleClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleClick()
+                    }
+                  }}
+                >
+                  <Icon className="h-4 w-4" />
+                  {!sidebarCollapsed && (
+                    <span className="ml-2">{item.label}</span>
+                  )}
+                </Button>
+                {/* Nested Chats list under Chat nav item */}
+                {item.id === 'chat' && (
+                  <SidebarChats
+                    collapsed={sidebarCollapsed}
+                    onSelectChat={(conv) => {
+                      window.dispatchEvent(new CustomEvent('chat:loadConversation', { detail: conv }))
+                    }}
+                  />
                 )}
-              </Button>
+              </div>
             )
           })}
         </nav>

@@ -1,9 +1,10 @@
 /**
- * Chat Handler - Claude API integration with tool use
- * Provides AI chat capabilities for browser mode
+ * Chat Handler - Multi-provider AI integration with tool use
+ * Supports Anthropic Claude and OpenAI GPT models
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -13,24 +14,59 @@ import dotenv from 'dotenv';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Anthropic client will be initialized lazily with workspace env
+// Clients will be initialized lazily with workspace env
 let anthropic = null;
+let openai = null;
+let envLoaded = false;
 
 /**
- * Initialize Anthropic client with API key from workspace
+ * Load environment variables from workspace
  */
-function getAnthropicClient(workspace) {
-  if (anthropic) return anthropic;
+function loadEnv(workspace) {
+  if (envLoaded) return;
 
-  // Load API key from workspace env.local
   const envPath = join(workspace, 'env.local');
   if (existsSync(envPath)) {
     dotenv.config({ path: envPath });
     console.log('📋 Loaded env.local from workspace:', workspace);
   }
+  envLoaded = true;
+}
 
-  anthropic = new Anthropic();
+/**
+ * Get chat configuration from environment
+ */
+export function getChatConfig() {
+  return {
+    provider: process.env.CHAT_PROVIDER || 'openai',
+    model: process.env.CHAT_MODEL || 'gpt-4o',
+    availableProviders: [
+      { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini'] },
+      { id: 'anthropic', name: 'Anthropic', models: ['claude-opus-4-20250514', 'claude-sonnet-4-20250514'] }
+    ]
+  };
+}
+
+/**
+ * Initialize Anthropic client
+ */
+function getAnthropicClient(workspace) {
+  loadEnv(workspace);
+  if (!anthropic) {
+    anthropic = new Anthropic();
+  }
   return anthropic;
+}
+
+/**
+ * Initialize OpenAI client
+ */
+function getOpenAIClient(workspace) {
+  loadEnv(workspace);
+  if (!openai) {
+    openai = new OpenAI();
+  }
+  return openai;
 }
 
 // Tool definitions for Claude
@@ -148,6 +184,16 @@ const tools = [
     }
   }
 ];
+
+// Convert Anthropic tools to OpenAI format
+const openaiTools = tools.map(tool => ({
+  type: 'function',
+  function: {
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.input_schema
+  }
+}));
 
 /**
  * Execute a tool and return result
@@ -457,20 +503,138 @@ WORKFLOW:
 Be concise. When done, tell user the viz is in the Visualizations tab.`;
 
 /**
+ * Handle a chat request with Anthropic Claude
+ */
+async function handleAnthropicChat(messages, workspace, systemPrompt, model) {
+  const client = getAnthropicClient(workspace);
+  const anthropicMessages = messages.map(m => ({ role: m.role, content: m.content }));
+
+  let toolsUsed = [];
+  let finalResponse = '';
+
+  let stream = await client.messages.stream({
+    model,
+    max_tokens: 16384,
+    system: systemPrompt,
+    tools,
+    messages: anthropicMessages
+  });
+  let response = await stream.finalMessage();
+
+  while (response.stop_reason === 'tool_use') {
+    console.log(`🔄 Tool loop iteration - stop_reason: ${response.stop_reason}`);
+    const assistantMessage = { role: 'assistant', content: response.content };
+    anthropicMessages.push(assistantMessage);
+
+    const toolResults = [];
+    for (const block of response.content) {
+      if (block.type === 'tool_use') {
+        console.log(`🔧 Tool call: ${block.name}`, JSON.stringify(block.input).slice(0, 200));
+        toolsUsed.push(block.name);
+        const result = await executeTool(block.name, block.input, workspace);
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: JSON.stringify(result)
+        });
+      }
+    }
+
+    anthropicMessages.push({ role: 'user', content: toolResults });
+    stream = await client.messages.stream({
+      model,
+      max_tokens: 16384,
+      system: systemPrompt,
+      tools,
+      messages: anthropicMessages
+    });
+    response = await stream.finalMessage();
+  }
+
+  console.log(`✅ Anthropic tool loop ended - final stop_reason: ${response.stop_reason}`);
+  for (const block of response.content) {
+    if (block.type === 'text') {
+      finalResponse += block.text;
+    }
+  }
+
+  return { response: finalResponse, toolsUsed };
+}
+
+/**
+ * Handle a chat request with OpenAI GPT
+ */
+async function handleOpenAIChat(messages, workspace, systemPrompt, model) {
+  const client = getOpenAIClient(workspace);
+  const openaiMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages.map(m => ({ role: m.role, content: m.content }))
+  ];
+
+  let toolsUsed = [];
+  let finalResponse = '';
+
+  let response = await client.chat.completions.create({
+    model,
+    max_tokens: 16384,
+    messages: openaiMessages,
+    tools: openaiTools
+  });
+
+  let message = response.choices[0].message;
+
+  while (message.tool_calls && message.tool_calls.length > 0) {
+    console.log(`🔄 OpenAI tool loop - ${message.tool_calls.length} tool calls`);
+    openaiMessages.push(message);
+
+    for (const toolCall of message.tool_calls) {
+      const toolName = toolCall.function.name;
+      const toolInput = JSON.parse(toolCall.function.arguments);
+      console.log(`🔧 Tool call: ${toolName}`, JSON.stringify(toolInput).slice(0, 200));
+      toolsUsed.push(toolName);
+
+      const result = await executeTool(toolName, toolInput, workspace);
+      openaiMessages.push({
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(result)
+      });
+    }
+
+    response = await client.chat.completions.create({
+      model,
+      max_tokens: 16384,
+      messages: openaiMessages,
+      tools: openaiTools
+    });
+    message = response.choices[0].message;
+  }
+
+  console.log(`✅ OpenAI tool loop ended`);
+  finalResponse = message.content || '';
+
+  return { response: finalResponse, toolsUsed };
+}
+
+/**
  * Handle a chat request
  * @param {Array} messages - Chat messages [{role, content}]
  * @param {string} workspace - Current workspace path
  * @param {Object} currentViz - Currently open visualization (optional)
+ * @param {Object} options - Optional config overrides {provider, model}
  * @returns {Promise<{response: string, toolsUsed: Array}>}
  */
-export async function handleChat(messages, workspace, currentViz = null) {
-  console.log(`💬 Chat handler: ${messages.length} messages, workspace: ${workspace}`);
+export async function handleChat(messages, workspace, currentViz = null, options = {}) {
+  // Load env and get config
+  loadEnv(workspace);
+  const config = getChatConfig();
+  const provider = options.provider || config.provider;
+  const model = options.model || config.model;
+
+  console.log(`💬 Chat handler: ${messages.length} messages, provider: ${provider}, model: ${model}`);
   if (currentViz) {
     console.log(`📊 Current viz context: ${currentViz.title} (${currentViz.filename})`);
   }
-
-  // Get Anthropic client (loads env.local from workspace)
-  const client = getAnthropicClient(workspace);
 
   // Build system prompt with current viz context
   let systemPrompt = SYSTEM_PROMPT;
@@ -484,78 +648,21 @@ When the user asks to modify "it", "this", or "the chart", they mean this visual
 Use read_visualization to get the current code, then use create_visualization with the SAME filename to update it.`;
   }
 
-  // Convert messages to Anthropic format
-  const anthropicMessages = messages.map(m => ({
-    role: m.role,
-    content: m.content
-  }));
-
-  let toolsUsed = [];
-  let finalResponse = '';
-
   try {
-    // Initial API call - use streaming for Opus (required for operations > 10 min)
-    let stream = await client.messages.stream({
-      model: 'claude-opus-4-20250514',
-      max_tokens: 16384,
-      system: systemPrompt,
-      tools,
-      messages: anthropicMessages
-    });
-    let response = await stream.finalMessage();
-
-    // Handle tool use loop
-    while (response.stop_reason === 'tool_use') {
-      console.log(`🔄 Tool loop iteration - stop_reason: ${response.stop_reason}`);
-      console.log(`📦 Response content blocks:`, response.content.map(b => ({ type: b.type, name: b.name || 'N/A' })));
-
-      const assistantMessage = { role: 'assistant', content: response.content };
-      anthropicMessages.push(assistantMessage);
-
-      // Process all tool uses
-      const toolResults = [];
-      for (const block of response.content) {
-        if (block.type === 'tool_use') {
-          console.log(`🔧 Tool call: ${block.name}`, JSON.stringify(block.input).slice(0, 200));
-          toolsUsed.push(block.name);
-
-          const result = await executeTool(block.name, block.input, workspace);
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: block.id,
-            content: JSON.stringify(result)
-          });
-        }
-      }
-
-      // Add tool results and continue
-      anthropicMessages.push({ role: 'user', content: toolResults });
-
-      stream = await client.messages.stream({
-        model: 'claude-opus-4-20250514',
-        max_tokens: 16384,
-        system: systemPrompt,
-        tools,
-        messages: anthropicMessages
-      });
-      response = await stream.finalMessage();
+    let result;
+    if (provider === 'anthropic') {
+      result = await handleAnthropicChat(messages, workspace, systemPrompt, model);
+    } else {
+      result = await handleOpenAIChat(messages, workspace, systemPrompt, model);
     }
 
-    // Log why we exited the loop
-    console.log(`✅ Tool loop ended - final stop_reason: ${response.stop_reason}`);
-    console.log(`📊 Tools used in session:`, toolsUsed);
-
-    // Extract final text response
-    for (const block of response.content) {
-      if (block.type === 'text') {
-        finalResponse += block.text;
-      }
-    }
-
+    console.log(`📊 Tools used in session:`, result.toolsUsed);
     return {
       success: true,
-      response: finalResponse,
-      toolsUsed
+      response: result.response,
+      toolsUsed: result.toolsUsed,
+      provider,
+      model
     };
 
   } catch (error) {
@@ -563,7 +670,9 @@ Use read_visualization to get the current code, then use create_visualization wi
     return {
       success: false,
       error: error.message,
-      response: `Error: ${error.message}`
+      response: `Error: ${error.message}`,
+      provider,
+      model
     };
   }
 }

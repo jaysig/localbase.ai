@@ -58,6 +58,15 @@ import { BaseConnector } from '../APIClient.js';
 // Features: auth, rate limiting, pagination
 ```
 
+## Security Notes
+
+**Important:** LocalBase is designed for local/trusted network use only.
+
+- The conversation storage API has **no authentication** - all conversations are accessible to anyone with network access to the server
+- Input validation limits are enforced (message: 50KB, title: 200 chars, search: 500 chars)
+- SQL injection is prevented via parameterized queries
+- Do not expose the server to untrusted networks without adding authentication
+
 ## Development Guidelines
 
 - Check existing tools before creating new ones

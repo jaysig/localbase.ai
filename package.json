@@ -14,7 +14,8 @@
     "update-g2": "node connectors/g2-api/update.js",
     "update-deals": "node connectors/hubspot/update.js",
     "test": "node --test test/**/*.test.js",
-    "test:watch": "node --test --watch test/**/*.test.js"
+    "test:watch": "node --test --watch test/**/*.test.js",
+    "test:coverage": "c8 --include='tools/server/**' node --test test/**/*.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
@@ -39,6 +40,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "c8": "^10.1.3",
     "concurrently": "^9.1.0"
   },
   "keywords": [

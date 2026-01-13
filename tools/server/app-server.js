@@ -25,7 +25,18 @@ import {
 } from './workspace-config.js';
 // import { CompanyCamConnector } from '../../connectors/companycam/index.js'; // REMOVED
 import Database from 'better-sqlite3';
-import { handleChat } from './chat-handler.js';
+import { handleChat, getChatConfig } from './chat-handler.js';
+import {
+  initConversationStore,
+  createConversation,
+  addMessage,
+  getConversation,
+  listConversations,
+  searchConversations,
+  updateConversationTitle,
+  deleteConversation,
+  LIMITS
+} from './conversation-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -62,6 +73,9 @@ const PORT = 3000;
 // Get current workspace from persistent config (sanitize on load)
 let currentWorkspace = sanitizePath(getCurrentWorkspace());
 
+// Initialize conversation store
+initConversationStore(currentWorkspace);
+
 // Detect if running from framework (localbase.ai) vs instance
 const cwd = process.cwd();
 const frameworkRoot = join(dirname(__dirname), '..'); // tools/server -> tools -> root
@@ -78,7 +92,7 @@ let vizDir = getVizDir(currentWorkspace);
 // Middleware - Allow CORS for Electron (null origin) and regular browsers
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -1969,13 +1983,155 @@ app.post('/api/mediatrader/query', (req, res) => {
 });
 
 /**
+ * GET /api/chat/config
+ * Get current chat configuration (provider, model, available options)
+ */
+app.get('/api/chat/config', (req, res) => {
+  try {
+    const config = getChatConfig();
+    res.json({ success: true, ...config });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/conversations
+ * List all conversations
+ */
+app.get('/api/conversations', (req, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    const result = listConversations(parseInt(limit), parseInt(offset));
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/conversations/search
+ * Search conversations by title or content
+ */
+app.get('/api/conversations/search', (req, res) => {
+  try {
+    const { q, limit = 20 } = req.query;
+    if (!q) {
+      return res.status(400).json({ success: false, error: 'Query parameter q is required' });
+    }
+    const conversations = searchConversations(q, parseInt(limit));
+    res.json({ success: true, conversations });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/conversations/:id
+ * Get a single conversation with all messages
+ */
+app.get('/api/conversations/:id', (req, res) => {
+  try {
+    const conversation = getConversation(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ success: false, error: 'Conversation not found' });
+    }
+    res.json({ success: true, conversation });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/conversations
+ * Create a new conversation with first message
+ */
+app.post('/api/conversations', (req, res) => {
+  try {
+    const { message, model, provider } = req.body;
+    if (!message || !message.content) {
+      return res.status(400).json({ success: false, error: 'message with content is required' });
+    }
+    if (message.content.length > LIMITS.MAX_MESSAGE_LENGTH) {
+      return res.status(400).json({ success: false, error: `Message exceeds maximum length of ${LIMITS.MAX_MESSAGE_LENGTH} characters` });
+    }
+    const conversation = createConversation(message, model, provider);
+    res.json({ success: true, conversation });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/conversations/:id/messages
+ * Add a message to an existing conversation
+ */
+app.post('/api/conversations/:id/messages', (req, res) => {
+  try {
+    const { message, model, provider } = req.body;
+    if (!message || !message.content) {
+      return res.status(400).json({ success: false, error: 'message with content is required' });
+    }
+    if (message.content.length > LIMITS.MAX_MESSAGE_LENGTH) {
+      return res.status(400).json({ success: false, error: `Message exceeds maximum length of ${LIMITS.MAX_MESSAGE_LENGTH} characters` });
+    }
+    addMessage(req.params.id, message, model, provider);
+    res.json({ success: true });
+  } catch (error) {
+    if (error.message === 'Conversation not found') {
+      return res.status(404).json({ success: false, error: error.message });
+    }
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/conversations/:id
+ * Update conversation title
+ */
+app.patch('/api/conversations/:id', (req, res) => {
+  try {
+    const { title } = req.body;
+    if (!title) {
+      return res.status(400).json({ success: false, error: 'title is required' });
+    }
+    if (title.length > LIMITS.MAX_TITLE_LENGTH) {
+      return res.status(400).json({ success: false, error: `Title exceeds maximum length of ${LIMITS.MAX_TITLE_LENGTH} characters` });
+    }
+    updateConversationTitle(req.params.id, title);
+    res.json({ success: true });
+  } catch (error) {
+    if (error.message === 'Conversation not found') {
+      return res.status(404).json({ success: false, error: error.message });
+    }
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/conversations/:id
+ * Delete a conversation
+ */
+app.delete('/api/conversations/:id', (req, res) => {
+  try {
+    deleteConversation(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    if (error.message === 'Conversation not found') {
+      return res.status(404).json({ success: false, error: error.message });
+    }
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/chat
  * Chat endpoint for browser mode AI interaction
- * Body: { messages: [{ role: 'user'|'assistant', content: string }] }
+ * Body: { messages: [{ role: 'user'|'assistant', content: string }], provider?, model?, currentViz? }
  */
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages, currentViz } = req.body;
+    const { messages, currentViz, provider, model } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({
@@ -1990,8 +2146,8 @@ app.post('/api/chat', async (req, res) => {
       console.log(`📊 Context viz: ${currentViz.title} (${currentViz.filename})`);
     }
 
-    // Call the chat handler with Claude API
-    const result = await handleChat(messages, currentWorkspace, currentViz);
+    // Call the chat handler
+    const result = await handleChat(messages, currentWorkspace, currentViz, provider, model);
 
     res.json(result);
   } catch (error) {

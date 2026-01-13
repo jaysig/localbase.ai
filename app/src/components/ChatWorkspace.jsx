@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Loader2, RefreshCw, X, Search, Plus } from 'lucide-react'
+import { Send, Bot, User, Loader2, RefreshCw, X, Search, Plus, ChevronDown, Save, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import ConversationSearch from './ConversationSearch'
 
 const CHAT_STORAGE_KEY = 'chatWorkspace_messages'
+const MODEL_STORAGE_KEY = 'chatWorkspace_model'
+const CONVERSATION_STORAGE_KEY = 'chatWorkspace_conversationId'
 
 /**
  * ChatWorkspace - Chat + Live Visualization Preview (Browser Mode)
@@ -41,6 +44,67 @@ export default function ChatWorkspace() {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const searchInputRef = useRef(null)
 
+  // Model configuration state
+  const [chatConfig, setChatConfig] = useState(null)
+  const [selectedProvider, setSelectedProvider] = useState(() => {
+    try {
+      const saved = localStorage.getItem(MODEL_STORAGE_KEY)
+      return saved ? JSON.parse(saved).provider : 'openai'
+    } catch { return 'openai' }
+  })
+  const [selectedModel, setSelectedModel] = useState(() => {
+    try {
+      const saved = localStorage.getItem(MODEL_STORAGE_KEY)
+      return saved ? JSON.parse(saved).model : 'gpt-4o'
+    } catch { return 'gpt-4o' }
+  })
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const dropdownRef = useRef(null)
+
+  // Conversation search state
+  const [showConversationSearch, setShowConversationSearch] = useState(false)
+  const [currentConversationId, setCurrentConversationId] = useState(() => {
+    try {
+      return localStorage.getItem(CONVERSATION_STORAGE_KEY) || null
+    } catch { return null }
+  })
+
+  // Save confirmation state
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false)
+  const [saveStatus, setSaveStatus] = useState(null) // 'saving' | 'saved' | 'error'
+
+  // Load chat config from API
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/chat/config')
+        const data = await response.json()
+        if (data.success) {
+          setChatConfig(data)
+        }
+      } catch (err) {
+        console.error('Failed to fetch chat config:', err)
+      }
+    }
+    fetchConfig()
+  }, [])
+
+  // Save model selection to localStorage
+  useEffect(() => {
+    localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify({ provider: selectedProvider, model: selectedModel }))
+  }, [selectedProvider, selectedModel])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowModelDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   // Auto-scroll chat on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -54,25 +118,144 @@ export default function ChatWorkspace() {
   // Clear chat / new conversation
   const handleNewChat = () => {
     setMessages([])
+    setCurrentConversationId(null)
     localStorage.removeItem(CHAT_STORAGE_KEY)
+    localStorage.removeItem(CONVERSATION_STORAGE_KEY)
   }
+
+  // Load a conversation from the database
+  const loadConversation = async (conv) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/conversations/${conv.id}`)
+      const data = await response.json()
+      if (data.success && data.conversation) {
+        const msgs = data.conversation.messages.map(m => ({
+          role: m.role,
+          content: m.content
+        }))
+        setMessages(msgs)
+        setCurrentConversationId(conv.id)
+        localStorage.setItem(CONVERSATION_STORAGE_KEY, conv.id)
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs))
+      }
+    } catch (err) {
+      console.error('Failed to load conversation:', err)
+    }
+  }
+
+  // Save current conversation to database (for unsaved chats)
+  const saveConversation = async () => {
+    if (messages.length === 0) return
+
+    // Already saved
+    if (currentConversationId) {
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 2000)
+      return
+    }
+
+    setSaveStatus('saving')
+    try {
+      // Create conversation with first message
+      const firstUserMsg = messages.find(m => m.role === 'user')
+      if (!firstUserMsg) {
+        setSaveStatus('error')
+        return
+      }
+
+      const createRes = await fetch('http://localhost:3000/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: firstUserMsg,
+          model: selectedModel,
+          provider: selectedProvider
+        })
+      })
+      const createData = await createRes.json()
+
+      if (createData.success) {
+        const convId = createData.conversation.id
+        setCurrentConversationId(convId)
+
+        // Add remaining messages
+        for (const msg of messages.slice(1)) {
+          await fetch(`http://localhost:3000/api/conversations/${convId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: msg,
+              model: selectedModel,
+              provider: selectedProvider
+            })
+          })
+        }
+
+        setSaveStatus('saved')
+        setTimeout(() => setSaveStatus(null), 2000)
+        // Notify sidebar to refresh
+        window.dispatchEvent(new CustomEvent('conversations:refresh'))
+      } else {
+        setSaveStatus('error')
+      }
+    } catch (err) {
+      console.error('Failed to save conversation:', err)
+      setSaveStatus('error')
+    }
+  }
+
+  // Save conversation ID to localStorage
+  useEffect(() => {
+    if (currentConversationId) {
+      localStorage.setItem(CONVERSATION_STORAGE_KEY, currentConversationId)
+    }
+  }, [currentConversationId])
+
+  // Listen for sidebar chat selection
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail) {
+        loadConversation(e.detail)
+      }
+    }
+    window.addEventListener('chat:loadConversation', handler)
+    return () => window.removeEventListener('chat:loadConversation', handler)
+  }, [])
+
+  // Listen for conversation deletion from sidebar
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail === currentConversationId) {
+        handleNewChat()
+      }
+    }
+    window.addEventListener('conversation:deleted', handler)
+    return () => window.removeEventListener('conversation:deleted', handler)
+  }, [currentConversationId])
 
   // Focus chat input on mount
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
-  // Cmd+K to focus chat input
+  // Cmd+K - context-aware: focus input OR open conversation search
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        inputRef.current?.focus()
+
+        // If input is focused AND empty, open conversation search
+        if (document.activeElement === inputRef.current && !input.trim()) {
+          setShowConversationSearch(true)
+        } else {
+          // Otherwise, focus the input
+          inputRef.current?.focus()
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [input])
 
   // Load visualizations for search
   useEffect(() => {
@@ -135,12 +318,51 @@ export default function ChatWorkspace() {
     setInput('')
     setLoading(true)
 
+    // Save user message to database
+    let convId = currentConversationId
+    try {
+      if (!convId) {
+        // Create new conversation
+        const createRes = await fetch('http://localhost:3000/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: userMessage,
+            model: selectedModel,
+            provider: selectedProvider
+          })
+        })
+        const createData = await createRes.json()
+        if (createData.success) {
+          convId = createData.conversation.id
+          setCurrentConversationId(convId)
+          // Notify sidebar to refresh
+          window.dispatchEvent(new CustomEvent('conversations:refresh'))
+        }
+      } else {
+        // Add to existing conversation
+        await fetch(`http://localhost:3000/api/conversations/${convId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: userMessage,
+            model: selectedModel,
+            provider: selectedProvider
+          })
+        })
+      }
+    } catch (err) {
+      console.error('Failed to save user message:', err)
+    }
+
     try {
       const response = await fetch('http://localhost:3000/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...messages, userMessage],
+          provider: selectedProvider,
+          model: selectedModel,
           currentViz: currentViz ? {
             filename: currentViz.filename,
             title: currentViz.title,
@@ -152,7 +374,25 @@ export default function ChatWorkspace() {
       const data = await response.json()
 
       if (data.success) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
+        const assistantMessage = { role: 'assistant', content: data.response }
+        setMessages(prev => [...prev, assistantMessage])
+
+        // Save assistant message to database
+        if (convId) {
+          try {
+            await fetch(`http://localhost:3000/api/conversations/${convId}/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: assistantMessage,
+                model: selectedModel,
+                provider: selectedProvider
+              })
+            })
+          } catch (err) {
+            console.error('Failed to save assistant message:', err)
+          }
+        }
 
         // Check if a visualization was created (look for toolsUsed containing create_visualization)
         if (data.toolsUsed?.includes('create_visualization')) {
@@ -197,7 +437,40 @@ export default function ChatWorkspace() {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
+
+      // Handle /save command
+      if (input.trim().toLowerCase() === '/save') {
+        setInput('')
+        if (currentConversationId) {
+          // Already saved, show inline message
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: 'This conversation is already saved.'
+          }])
+        } else if (messages.length === 0) {
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: 'Nothing to save yet. Start a conversation first.'
+          }])
+        } else {
+          setShowSaveConfirm(true)
+        }
+        return
+      }
+
       sendMessage()
+    }
+  }
+
+  // Handle save confirmation
+  const handleSaveConfirm = async (confirmed) => {
+    setShowSaveConfirm(false)
+    if (confirmed) {
+      await saveConversation()
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: 'Conversation saved!'
+      }])
     }
   }
 
@@ -261,20 +534,89 @@ export default function ChatWorkspace() {
           style={{ width: `${splitPosition}%` }}
         >
           {/* Chat Header */}
-          <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-green-400">Chat</h3>
-            {messages.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleNewChat}
-                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                title="New Chat"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                New
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Model Selector */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setShowModelDropdown(!showModelDropdown)}
+                  className="flex items-center gap-1 h-6 px-2 text-xs text-muted-foreground hover:text-foreground bg-muted rounded transition-colors"
+                >
+                  <span className="truncate max-w-[100px]">{selectedModel}</span>
+                  <ChevronDown className="h-3 w-3 flex-shrink-0" />
+                </button>
+                {showModelDropdown && chatConfig && (
+                  <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg z-50 min-w-[180px] py-1">
+                    {chatConfig.availableProviders.map(provider => (
+                      <div key={provider.id}>
+                        <div className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          {provider.name}
+                        </div>
+                        {provider.models.map(model => (
+                          <button
+                            key={model}
+                            onClick={() => {
+                              setSelectedProvider(provider.id)
+                              setSelectedModel(model)
+                              setShowModelDropdown(false)
+                            }}
+                            className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${
+                              selectedModel === model && selectedProvider === provider.id
+                                ? 'text-green-400 bg-muted/50'
+                                : 'text-foreground'
+                            }`}
+                          >
+                            {model}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Save Button */}
+              {messages.length > 0 && !currentConversationId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={saveConversation}
+                  disabled={saveStatus === 'saving'}
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  title="Save Conversation"
+                >
+                  {saveStatus === 'saving' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : saveStatus === 'saved' ? (
+                    <Check className="h-3 w-3 text-green-400" />
+                  ) : (
+                    <>
+                      <Save className="h-3 w-3 mr-1" />
+                      Save
+                    </>
+                  )}
+                </Button>
+              )}
+              {/* Saved indicator */}
+              {currentConversationId && messages.length > 0 && (
+                <span className="text-xs text-green-400/70 flex items-center gap-1">
+                  <Check className="h-3 w-3" />
+                  Saved
+                </span>
+              )}
+              {messages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleNewChat}
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  title="New Chat"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  New
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Messages */}
@@ -290,26 +632,58 @@ export default function ChatWorkspace() {
             )}
 
             {messages.map((msg, i) => (
-              <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.role === 'assistant' && (
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-3 h-3 text-primary" />
+              msg.role === 'system' ? (
+                // System message (inline notifications)
+                <div key={i} className="flex justify-center">
+                  <div className="bg-muted/50 border border-border rounded-lg px-3 py-1.5 text-xs text-muted-foreground">
+                    {msg.content}
                   </div>
-                )}
-                <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
-                }`} style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                  <div className="whitespace-pre-wrap text-xs" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.content}</div>
                 </div>
-                {msg.role === 'user' && (
-                  <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                    <User className="w-3 h-3 text-primary-foreground" />
+              ) : (
+                <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.role === 'assistant' && (
+                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Bot className="w-3 h-3 text-primary" />
+                    </div>
+                  )}
+                  <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted'
+                  }`} style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                    <div className="whitespace-pre-wrap text-xs" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.content}</div>
                   </div>
-                )}
-              </div>
+                  {msg.role === 'user' && (
+                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                      <User className="w-3 h-3 text-primary-foreground" />
+                    </div>
+                  )}
+                </div>
+              )
             ))}
+
+            {/* Save Confirmation Inline */}
+            {showSaveConfirm && (
+              <div className="flex justify-center">
+                <div className="bg-card border border-border rounded-lg px-4 py-3 text-sm shadow-lg">
+                  <p className="text-foreground mb-2">Save this conversation?</p>
+                  <div className="flex gap-2 justify-center">
+                    <button
+                      onClick={() => handleSaveConfirm(true)}
+                      className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 transition-colors"
+                    >
+                      Yes, save
+                    </button>
+                    <button
+                      onClick={() => handleSaveConfirm(false)}
+                      className="px-3 py-1 bg-muted text-foreground rounded text-xs hover:bg-muted/80 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {loading && (
               <div className="flex gap-2 justify-start">
@@ -471,6 +845,19 @@ export default function ChatWorkspace() {
           )}
         </div>
       </div>
+
+      {/* Conversation Search Modal */}
+      <ConversationSearch
+        isOpen={showConversationSearch}
+        onClose={() => setShowConversationSearch(false)}
+        onSelect={loadConversation}
+        onNew={handleNewChat}
+        onDelete={(id) => {
+          if (currentConversationId === id) {
+            handleNewChat()
+          }
+        }}
+      />
     </div>
   )
 }
