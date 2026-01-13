@@ -30,11 +30,15 @@ export default function SidebarChats({ collapsed, onSelectChat }) {
     loadConversations()
   }, [])
 
-  // Refresh when a conversation is saved
+  // Refresh when a conversation is saved or workspace changes
   useEffect(() => {
     const handler = () => loadConversations()
     window.addEventListener('conversations:refresh', handler)
-    return () => window.removeEventListener('conversations:refresh', handler)
+    window.addEventListener('workspace:changed', handler)
+    return () => {
+      window.removeEventListener('conversations:refresh', handler)
+      window.removeEventListener('workspace:changed', handler)
+    }
   }, [])
 
   // Focus edit input when editing starts

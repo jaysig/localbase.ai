@@ -18,7 +18,12 @@ export const browserAPI = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path })
       });
-      return res.json();
+      const data = await res.json();
+      if (data.success) {
+        // Notify components that workspace changed
+        window.dispatchEvent(new CustomEvent('workspace:changed', { detail: path }));
+      }
+      return data;
     }
   },
 

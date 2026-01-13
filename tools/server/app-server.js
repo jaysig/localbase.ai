@@ -164,6 +164,9 @@ function switchWorkspace(workspacePath) {
   // Re-initialize registry with new workspace viz dir
   registry = new VizRegistry(vizDir);
 
+  // Re-initialize conversation store for new workspace
+  initConversationStore(currentWorkspace);
+
   // Persist workspace selection
   setCurrentWorkspace(currentWorkspace);
 
