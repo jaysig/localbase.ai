@@ -17,20 +17,25 @@ const __dirname = dirname(__filename);
 // Clients will be initialized lazily with workspace env
 let anthropic = null;
 let openai = null;
-let envLoaded = false;
+let lastEnvWorkspace = null;
 
 /**
  * Load environment variables from workspace
+ * Reloads if workspace changes
  */
 function loadEnv(workspace) {
-  if (envLoaded) return;
+  if (lastEnvWorkspace === workspace) return;
 
   const envPath = join(workspace, 'env.local');
   if (existsSync(envPath)) {
-    dotenv.config({ path: envPath });
+    dotenv.config({ path: envPath, override: true });
     console.log('📋 Loaded env.local from workspace:', workspace);
   }
-  envLoaded = true;
+  lastEnvWorkspace = workspace;
+
+  // Reset clients so they pick up new credentials
+  openai = null;
+  anthropic = null;
 }
 
 /**
