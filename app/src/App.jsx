@@ -316,7 +316,7 @@ function App() {
             }
 
             return (
-              <div key={item.id}>
+              <div key={item.id} className={item.id === 'chat' ? 'relative' : ''}>
                 <Button
                   variant={selectedView === item.id ? 'secondary' : 'ghost'}
                   className={`w-full mb-1 ${

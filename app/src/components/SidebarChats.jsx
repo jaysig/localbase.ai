@@ -105,8 +105,17 @@ export default function SidebarChats({ collapsed, onSelectChat }) {
     }
   }
 
-  // Don't render if sidebar is collapsed or no conversations
-  if (collapsed || conversations.length === 0) return null
+  // Don't render if no conversations
+  if (conversations.length === 0) return null
+
+  // Show count badge on icon when collapsed
+  if (collapsed) {
+    return (
+      <div className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full">
+        {conversations.length}
+      </div>
+    )
+  }
 
   return (
     <div className="pl-4 pr-2 py-1 space-y-0.5">

@@ -313,6 +313,14 @@ export default function ChatWorkspace() {
   const sendMessage = async () => {
     if (!input.trim() || loading) return
 
+    // Handle /commands
+    const trimmedInput = input.trim().toLowerCase()
+    if (trimmedInput === '/clear') {
+      setInput('')
+      handleNewChat()
+      return
+    }
+
     const userMessage = { role: 'user', content: input }
     setMessages(prev => [...prev, userMessage])
     setInput('')
