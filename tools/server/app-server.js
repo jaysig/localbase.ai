@@ -2252,6 +2252,8 @@ app.use('/viz', (req, res, next) => {
   express.static(vizDir, {
     setHeaders: (res, path) => {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      // Allow embedding in iframes (needed for Vite dev server on different port)
+      res.removeHeader('X-Frame-Options');
     }
   })(req, res, next);
 });

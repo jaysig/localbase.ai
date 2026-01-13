@@ -16,16 +16,77 @@ This means:
 
 **Note:** When you use AI features (Chat, Claude Code), the data you query gets sent to Claude. Claude sees whatever you ask about - not your entire database, but the specific data in your prompts and results.
 
-## Quick Start
+## Getting Started
 
-```bash
-git clone https://github.com/rriggin/localbase.ai.git
+### Step 1: Create a GitHub Account
+
+If you don't have one already, sign up at [github.com](https://github.com). This is where the code lives.
+
+### Step 2: Open Terminal
+
+On Mac, press `Cmd + Space`, type "Terminal", and hit Enter. You'll see a window with a blinking cursor - this is where you'll type commands.
+
+Don't worry, you can't break anything. If something goes wrong, just close the window and open a new one.
+
+### Step 3: Get Comfortable with Basic Commands
+
+Try these to get a feel for it:
+
+- `ls` - Lists files in the current folder
+- `cd Documents` - Moves into the Documents folder
+- `cd ..` - Moves back up one folder
+- `pwd` - Shows where you are
+
+That's it. You now know enough terminal to continue.
+
+### Step 4: Install the Tools
+
+Copy and paste these one at a time. Each one installs something you'll need:
+
+**Install Homebrew** (a tool that installs other tools):
+```
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+**Install GitHub CLI:**
+```
+brew install gh
+```
+
+**Install Node.js:**
+```
+brew install node
+```
+
+**Install Claude Code:**
+
+Visit [claude.ai/code](https://claude.ai/code) and follow the instructions.
+
+### Step 5: Log into GitHub
+
+Run this command:
+```
+gh auth login
+```
+
+It will ask you some questions - just follow the prompts. It opens your browser to complete the login.
+
+### Step 6: Download LocalBase
+
+Now you can grab the code:
+```
+gh repo clone rriggin/localbase.ai
 cd localbase.ai
 npm install
+```
+
+### Step 7: Start It Up
+
+```
 npm run dev
 ```
 
-Open http://localhost:5173
+Open [http://localhost:5173](http://localhost:5173) in your browser. You're in.
 
 ## Data Setup
 
@@ -40,11 +101,13 @@ To set up:
 
 The web UI gives you:
 
-- **Chat** - Ask questions about your data in natural language
+- **Chat** (beta) - Ask questions about your data in natural language
 - **Visualizations** - Browse and interact with charts
 - **Settings** - See connected data sources and sync status
 
 The chat can create visualizations on the fly. Ask "show me a chart of monthly revenue" and it generates an interactive chart.
+
+*The web chat is still in beta. For the full experience, use Claude Code in the terminal.*
 
 ## Using with Claude Code
 
