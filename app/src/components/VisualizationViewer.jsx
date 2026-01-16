@@ -23,7 +23,9 @@ export default function VisualizationViewer() {
 
   // Get viz ID from URL on initial load
   const getVizIdFromUrl = () => {
-    const params = new URLSearchParams(window.location.search)
+    // Use captured URL from index.html (handles direct URL navigation)
+    const search = window.__INITIAL_SEARCH__ || window.location.search
+    const params = new URLSearchParams(search)
     return params.get('viz')
   }
   const [typeFilter, setTypeFilter] = useState(() => {
@@ -130,13 +132,14 @@ export default function VisualizationViewer() {
       const url = new URL(window.location.href)
       url.searchParams.set('viz', selectedViz.id)
       window.history.pushState({}, '', url)
-    } else if (!selectedViz && currentVizId) {
-      // Remove viz param when going back to gallery
+    } else if (!selectedViz && currentVizId && visualizations.length > 0) {
+      // Only remove viz param when going back to gallery AFTER vizzes loaded
+      // (prevents stripping URL before we can restore the viz)
       const url = new URL(window.location.href)
       url.searchParams.delete('viz')
       window.history.pushState({}, '', url)
     }
-  }, [selectedViz])
+  }, [selectedViz, visualizations.length])
 
   // Handle browser back/forward buttons
   useEffect(() => {
