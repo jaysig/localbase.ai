@@ -53,7 +53,14 @@ function App() {
 
   const [currentWorkspace, setCurrentWorkspace] = useState('')
   // Default to chat view, but restore from localStorage if available
+  // If ?viz= param is present, go straight to visualizations view
   const [selectedView, setSelectedView] = useState(() => {
+    // Use URL captured in index.html before React loads (handles direct URL navigation)
+    const initialSearch = window.__INITIAL_SEARCH__ || window.location.search
+    const params = new URLSearchParams(initialSearch)
+    if (params.get('viz')) {
+      return 'visualizations'
+    }
     return localStorage.getItem('localbase-selected-view') || 'chat'
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -83,7 +90,7 @@ function App() {
   useEffect(() => {
     // Push initial state on mount
     if (!window.history.state?.view) {
-      window.history.replaceState({ view: selectedView }, '', window.location.pathname)
+      window.history.replaceState({ view: selectedView }, '', window.location.href)
     }
 
     const handlePopState = (e) => {
@@ -91,7 +98,7 @@ function App() {
         setSelectedView(e.state.view)
       } else {
         // No previous state - stay on current view (don't exit)
-        window.history.pushState({ view: selectedView }, '', window.location.pathname)
+        window.history.pushState({ view: selectedView }, '', window.location.href)
       }
     }
 
@@ -103,7 +110,8 @@ function App() {
   useEffect(() => {
     // Only push if the current state is different
     if (window.history.state?.view !== selectedView) {
-      window.history.pushState({ view: selectedView }, '', window.location.pathname)
+      // Preserve query params when changing views
+      window.history.pushState({ view: selectedView }, '', window.location.href)
     }
   }, [selectedView])
 

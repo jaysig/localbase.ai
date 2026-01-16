@@ -8,6 +8,11 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Capture URL params before React loads (debugging URL routing issue)
+      window.__INITIAL_URL__ = window.location.href;
+      window.__INITIAL_SEARCH__ = window.location.search;
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
