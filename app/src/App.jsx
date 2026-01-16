@@ -57,8 +57,10 @@ function App() {
   const [selectedView, setSelectedView] = useState(() => {
     // Use URL captured in index.html before React loads (handles direct URL navigation)
     const initialSearch = window.__INITIAL_SEARCH__ || window.location.search
+    console.log('🔍 App.jsx init - initialSearch:', initialSearch, '__INITIAL_SEARCH__:', window.__INITIAL_SEARCH__)
     const params = new URLSearchParams(initialSearch)
-    if (params.get('viz')) {
+    if (params.get('viz') || params.get('project')) {
+      console.log('🔍 App.jsx - detected viz/project param, going to visualizations')
       return 'visualizations'
     }
     return localStorage.getItem('localbase-selected-view') || 'chat'

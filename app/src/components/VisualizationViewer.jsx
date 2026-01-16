@@ -28,6 +28,19 @@ export default function VisualizationViewer() {
     const params = new URLSearchParams(search)
     return params.get('viz')
   }
+
+  // Get project filter from URL
+  const getProjectFromUrl = () => {
+    const search = window.__INITIAL_SEARCH__ || window.location.search
+    const params = new URLSearchParams(search)
+    return params.get('project')
+  }
+
+  const [projectFilter, setProjectFilter] = useState(() => {
+    const project = getProjectFromUrl()
+    console.log('🔍 VisualizationViewer init - project from URL:', project, 'search:', window.__INITIAL_SEARCH__ || window.location.search)
+    return project || null
+  })
   const [typeFilter, setTypeFilter] = useState(() => {
     return localStorage.getItem('viz-type-filter') || 'all'
   })
@@ -295,8 +308,13 @@ export default function VisualizationViewer() {
   // Get unique types from visualizations
   const vizTypes = [...new Set(visualizations.map(v => v.type))].sort()
 
-  // Filter visualizations by type and search query, then sort by most recent first
+  // Filter visualizations by project, type, and search query, then sort by most recent first
   let filteredVisualizations = visualizations
+
+  // Apply project filter (from URL param)
+  if (projectFilter) {
+    filteredVisualizations = filteredVisualizations.filter(v => v.project === projectFilter)
+  }
 
   // Apply type filter
   if (typeFilter !== 'all') {
@@ -327,6 +345,31 @@ export default function VisualizationViewer() {
   // Show visualization gallery
   return (
     <div className="p-8">
+      {/* Project Filter Banner */}
+      {projectFilter && (
+        <div className="mb-4 flex items-center justify-between bg-green-400/10 border border-green-400/30 rounded-lg px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-green-400 font-semibold">Project:</span>
+            <span className="text-foreground">{projectFilter}</span>
+            <span className="text-muted-foreground text-sm">({filteredVisualizations.length} visualizations)</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setProjectFilter(null)
+              const url = new URL(window.location.href)
+              url.searchParams.delete('project')
+              window.history.pushState({}, '', url)
+            }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4 mr-1" />
+            Clear filter
+          </Button>
+        </div>
+      )}
+
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h2 className="text-2xl font-bold text-green-400">Visualizations</h2>
