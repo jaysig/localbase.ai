@@ -658,9 +658,11 @@ app.delete('/api/viz/:id', async (req, res) => {
 app.get('/api/viz', async (req, res) => {
   try {
     const allViz = await registry.getAll();
+    const projectsWithPresentation = registry.getProjectsWithPresentation();
     res.json({
       success: true,
       visualizations: allViz,
+      projectsWithPresentation,
       total: allViz.length
     });
   } catch (error) {

@@ -16,6 +16,7 @@ const buildVizUrl = (vizPath) => {
 
 export default function VisualizationViewer() {
   const [visualizations, setVisualizations] = useState([])
+  const [projectsWithPresentation, setProjectsWithPresentation] = useState([])
   const [selectedViz, setSelectedViz] = useState(null)
   const [selectedProject, setSelectedProject] = useState(null)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('viz-view-mode') || 'grid')
@@ -41,6 +42,7 @@ export default function VisualizationViewer() {
       try {
         const data = await window.electronAPI.api.getVisualizations()
         setVisualizations(data.visualizations || [])
+        setProjectsWithPresentation(data.projectsWithPresentation || [])
       } catch (err) {
         console.error('Failed to fetch visualizations:', err)
       }
@@ -317,12 +319,12 @@ export default function VisualizationViewer() {
   // Render: Gallery
   return (
     <div className="p-8">
-      {/* Projects Section */}
-      {projects.length > 0 && (
+      {/* Projects Section - only show projects that have presentation pages */}
+      {projects.filter(p => projectsWithPresentation.includes(p)).length > 0 && (
         <div className="mb-8">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Projects</h3>
           <div className="flex flex-wrap gap-3">
-            {projects.map(project => (
+            {projects.filter(p => projectsWithPresentation.includes(p)).map(project => (
               <div key={project} className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-3 hover:border-green-400/50 transition-colors">
                 <div>
                   <div className="font-medium text-foreground">{project}</div>

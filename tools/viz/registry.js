@@ -2,7 +2,7 @@
  * Visualization Registry - Automatic visualization tracking and metadata management
  */
 
-import { readFileSync, writeFileSync, unlinkSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, unlinkSync, statSync, existsSync, readdirSync } from 'fs';
 import { join, basename, normalize } from 'path';
 
 export class VizRegistry {
@@ -134,6 +134,32 @@ export class VizRegistry {
   async getAll() {
     const registry = this.loadRegistry();
     return registry.visualizations;
+  }
+
+  /**
+   * Get projects that have presentation pages (index.html in viz/projects/{name}/)
+   */
+  getProjectsWithPresentation() {
+    const projectsDir = join(this.vizDir, 'projects');
+    const projectsWithPresentation = [];
+
+    try {
+      if (existsSync(projectsDir)) {
+        const dirs = readdirSync(projectsDir, { withFileTypes: true });
+        for (const dir of dirs) {
+          if (dir.isDirectory()) {
+            const indexPath = join(projectsDir, dir.name, 'index.html');
+            if (existsSync(indexPath)) {
+              projectsWithPresentation.push(dir.name);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Could not read projects directory:', error.message);
+    }
+
+    return projectsWithPresentation;
   }
 
   /**
