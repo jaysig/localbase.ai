@@ -31,7 +31,7 @@ export const browserAPI = {
     async getVisualizations() {
       const res = await fetch(`${API_BASE}/api/viz`);
       const data = await res.json();
-      return data.success ? { success: true, visualizations: data.visualizations } : data;
+      return data.success ? { success: true, visualizations: data.visualizations, projectsWithPresentation: data.projectsWithPresentation || [] } : data;
     },
     async deleteVisualization(id) {
       const res = await fetch(`${API_BASE}/api/viz/${id}`, { method: 'DELETE' });
