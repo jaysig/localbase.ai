@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { Search, Mail, Phone, MapPin, DollarSign, Calendar, X, User } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,7 @@ export default function Customers() {
   const [customerPayments, setCustomerPayments] = useState([])
   const [sortColumn, setSortColumn] = useState('last_payment_date')
   const [sortDirection, setSortDirection] = useState('desc')
+  const searchInputRef = useRef(null)
 
   useEffect(() => {
     loadCustomers()
@@ -399,6 +400,14 @@ export default function Customers() {
         return
       }
 
+      // Command+K - Focus search (works from anywhere, even in input)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+        return
+      }
+
       // Don't interfere when typing in input fields
       if (e.target.tagName === 'INPUT' ||
           e.target.tagName === 'TEXTAREA' ||
@@ -406,17 +415,51 @@ export default function Customers() {
         return
       }
 
-      // / - Focus search
-      if (e.key === '/') {
+      // / or Command+L - Focus search
+      if (e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key === 'l')) {
         e.preventDefault()
-        document.querySelector('input[type="text"]')?.focus()
+        searchInputRef.current?.focus()
         return
       }
 
-      // Command+L - Focus search
-      if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
+      // Arrow keys for navigation (in addition to j/k)
+      if (e.key === 'ArrowDown') {
         e.preventDefault()
-        document.querySelector('input[type="text"]')?.focus()
+        if (filteredCustomers.length === 0) return
+
+        const currentIndex = filteredCustomers.findIndex(c => c.id === selectedCustomerId)
+        if (currentIndex === -1) {
+          flushSync(() => {
+            setSelectedCustomerId(filteredCustomers[0].id)
+          })
+          scrollToCustomer(filteredCustomers[0].id)
+        } else if (currentIndex < filteredCustomers.length - 1) {
+          const nextCustomer = filteredCustomers[currentIndex + 1]
+          flushSync(() => {
+            setSelectedCustomerId(nextCustomer.id)
+          })
+          scrollToCustomer(nextCustomer.id)
+        }
+        return
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (filteredCustomers.length === 0) return
+
+        const currentIndex = filteredCustomers.findIndex(c => c.id === selectedCustomerId)
+        if (currentIndex === -1) {
+          flushSync(() => {
+            setSelectedCustomerId(filteredCustomers[0].id)
+          })
+          scrollToCustomer(filteredCustomers[0].id)
+        } else if (currentIndex > 0) {
+          const prevCustomer = filteredCustomers[currentIndex - 1]
+          flushSync(() => {
+            setSelectedCustomerId(prevCustomer.id)
+          })
+          scrollToCustomer(prevCustomer.id)
+        }
         return
       }
 
@@ -553,29 +596,29 @@ export default function Customers() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex flex-col gap-4 p-4 border-b border-gray-800">
-        <div className="flex items-center justify-between">
-          <div>
+      <div className="flex flex-col px-4 py-3 border-b border-gray-800">
+        <div className="flex items-center gap-4">
+          <div className="flex items-baseline gap-3 shrink-0">
             <h1 className="text-2xl font-bold">Customers</h1>
-            <p className="text-sm text-gray-400">{filteredCustomers.length} paying customers</p>
+            <span className="text-sm text-gray-400">{filteredCustomers.length} paying</span>
+          </div>
+
+          {/* Search - fills remaining space */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search... (⌘K)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 w-full h-9"
+            />
           </div>
         </div>
 
-        {/* Search */}
-        <div className="w-full space-y-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search: 'over 10k', '>5 payments', 'this month', or name/email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-full"
-            />
-          </div>
-
-          {/* Active Filters Display */}
-          {debouncedSearchTerm && (() => {
+        {/* Active Filters Display - only renders when filters are active */}
+        {debouncedSearchTerm && (() => {
             const filters = parseFilters(debouncedSearchTerm)
             const hasFilters = filters.totalPaid.min || filters.totalPaid.max ||
                               filters.paymentCount.min || filters.paymentCount.max ||
@@ -618,7 +661,6 @@ export default function Customers() {
               </div>
             )
           })()}
-        </div>
       </div>
 
       {/* List View */}
