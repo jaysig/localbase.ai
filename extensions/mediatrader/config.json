@@ -1,6 +1,6 @@
 {
-  "name": "Indicators",
-  "description": "Leading and lagging indicators: signals, correlations, and media attribution",
+  "name": "MediaTrader",
+  "description": "Media spend analysis, correlation tracking, and attribution modeling",
   "version": "1.0.0",
   "presentation": "sidebar",
   "icon": "Radar",
