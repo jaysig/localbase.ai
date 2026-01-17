@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { initBrowserAPI } from '@/lib/browserAPI'
 
 // Initialize browser API shim if not in Electron
@@ -30,13 +30,15 @@ import { MessageSquare } from 'lucide-react'
 // Browser-only mode (no Electron)
 const isBrowserMode = true
 
-// Static imports for tool components (avoiding Vite dynamic import issues)
-import MediaTrader from '@/components/tools/MediaTrader'
-
-// Component mapping for static imports
-const toolComponentMap = {
-  'mediatrader': MediaTrader
+// Dynamic component loader - loads extension components on demand
+// Components are mapped by ID to their path in @/components/
+// Add instance-specific components here (e.g., 'customers': () => import('@/components/crm/Customers'))
+const componentLoaders = {
+  'mediatrader': () => import('@/components/tools/MediaTrader'),
 }
+
+// Cache for loaded components
+const loadedComponents = {}
 
 // Icon mapping for lucide-react icons
 const getIconComponent = (iconName) => {
@@ -72,6 +74,7 @@ function App() {
   })
   const [vizKey, setVizKey] = useState(0)
   const [toolNavItems, setToolNavItems] = useState([])
+  const [extensionComponents, setExtensionComponents] = useState({})
   const [forceSingleWorkspace, setForceSingleWorkspace] = useState(() => {
     return localStorage.getItem('localbase-force-single-workspace') === 'true'
   })
@@ -193,6 +196,25 @@ function App() {
     }
   }
 
+  // Load an extension component dynamically
+  const loadExtensionComponent = async (componentId) => {
+    if (extensionComponents[componentId]) return // Already loaded
+    if (!componentLoaders[componentId]) {
+      console.warn(`No loader found for component: ${componentId}`)
+      return
+    }
+
+    try {
+      const module = await componentLoaders[componentId]()
+      setExtensionComponents(prev => ({
+        ...prev,
+        [componentId]: module.default
+      }))
+    } catch (err) {
+      console.error(`Failed to load component ${componentId}:`, err)
+    }
+  }
+
   useEffect(() => {
     loadWorkspace()
     loadToolNavItems()
@@ -205,6 +227,13 @@ function App() {
       loadToolNavItems()
     }
   }, [currentWorkspace])
+
+  // Load extension component when selectedView changes to a tool view
+  useEffect(() => {
+    if (componentLoaders[selectedView] && !extensionComponents[selectedView]) {
+      loadExtensionComponent(selectedView)
+    }
+  }, [selectedView, extensionComponents])
 
   // Persist sidebar state to localStorage whenever it changes
   useEffect(() => {
@@ -424,11 +453,19 @@ function App() {
           ) : selectedView === 'chat' ? (
             <ChatWorkspace />
           ) : (() => {
-            // Check if this is a tool view
-            const ToolComponent = toolComponentMap[selectedView]
-            if (ToolComponent) {
+            // Check if this is a dynamically loaded extension component
+            const ExtensionComponent = extensionComponents[selectedView]
+            if (ExtensionComponent) {
               // Force remount when workspace changes by using workspace as key
-              return <ToolComponent key={currentWorkspace} />
+              return <ExtensionComponent key={currentWorkspace} />
+            }
+            // Show loading state while component loads
+            if (componentLoaders[selectedView]) {
+              return (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  Loading...
+                </div>
+              )
             }
             return null
           })()}
