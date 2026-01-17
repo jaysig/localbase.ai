@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, BarChart3, Trash2, LayoutGrid, List, Search, Star } from 'lucide-react'
+import { X, BarChart3, Trash2, LayoutGrid, List, Search, Star, Presentation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 
 // Helper to build viz URLs - uses HTTP in browser mode, localbase:// in Electron
 const buildVizUrl = (vizPath) => {
@@ -17,41 +17,26 @@ const buildVizUrl = (vizPath) => {
 export default function VisualizationViewer() {
   const [visualizations, setVisualizations] = useState([])
   const [selectedViz, setSelectedViz] = useState(null)
-  const [viewMode, setViewMode] = useState(() => {
-    return localStorage.getItem('viz-view-mode') || 'grid'
-  })
+  const [selectedProject, setSelectedProject] = useState(null)
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('viz-view-mode') || 'grid')
+  const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem('viz-type-filter') || 'all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [deletingId, setDeletingId] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [iframeKey, setIframeKey] = useState(0)
+  const [iframeUrl, setIframeUrl] = useState('')
+  const [initialRestoreAttempted, setInitialRestoreAttempted] = useState(false)
+  const searchInputRef = useRef(null)
 
   // Get viz ID from URL on initial load
   const getVizIdFromUrl = () => {
-    // Use captured URL from index.html (handles direct URL navigation)
     const search = window.__INITIAL_SEARCH__ || window.location.search
     const params = new URLSearchParams(search)
     return params.get('viz')
   }
 
-  // Get project filter from URL
-  const getProjectFromUrl = () => {
-    const search = window.__INITIAL_SEARCH__ || window.location.search
-    const params = new URLSearchParams(search)
-    return params.get('project')
-  }
-
-  const [projectFilter, setProjectFilter] = useState(() => {
-    const project = getProjectFromUrl()
-    console.log('🔍 VisualizationViewer init - project from URL:', project, 'search:', window.__INITIAL_SEARCH__ || window.location.search)
-    return project || null
-  })
-  const [typeFilter, setTypeFilter] = useState(() => {
-    return localStorage.getItem('viz-type-filter') || 'all'
-  })
-  const [searchQuery, setSearchQuery] = useState('')
-  const [deletingId, setDeletingId] = useState(null)
-  const [deleteConfirm, setDeleteConfirm] = useState(null) // viz to confirm delete
-  const [iframeKey, setIframeKey] = useState(0)
-  const searchInputRef = useRef(null)
-
+  // Fetch visualizations
   useEffect(() => {
-    // Fetch visualizations via IPC
     const fetchVisualizations = async () => {
       try {
         const data = await window.electronAPI.api.getVisualizations()
@@ -60,56 +45,62 @@ export default function VisualizationViewer() {
         console.error('Failed to fetch visualizations:', err)
       }
     }
-
-    // Initial fetch
     fetchVisualizations()
-
-    // DISABLED: 3-second polling causes iframe reloads
-    // Poll every 30 seconds for new visualizations (reduced frequency)
     const interval = setInterval(fetchVisualizations, 30000)
-
     return () => clearInterval(interval)
   }, [])
 
-  // Save view mode to localStorage
-  useEffect(() => {
-    localStorage.setItem('viz-view-mode', viewMode)
-  }, [viewMode])
+  // Persist preferences
+  useEffect(() => { localStorage.setItem('viz-view-mode', viewMode) }, [viewMode])
+  useEffect(() => { localStorage.setItem('viz-type-filter', typeFilter) }, [typeFilter])
 
-  // Save type filter to localStorage
+  // Event: refresh iframe
   useEffect(() => {
-    localStorage.setItem('viz-type-filter', typeFilter)
-  }, [typeFilter])
-
-  // Listen for refresh event from App.jsx
-  useEffect(() => {
-    const handleRefresh = () => {
-      console.log('🔄 VisualizationViewer: Received refresh event')
-      setIframeKey(prev => prev + 1)
-    }
-
-    window.addEventListener('visualizations:refresh', handleRefresh)
-    return () => window.removeEventListener('visualizations:refresh', handleRefresh)
+    const handler = () => setIframeKey(prev => prev + 1)
+    window.addEventListener('visualizations:refresh', handler)
+    return () => window.removeEventListener('visualizations:refresh', handler)
   }, [])
 
-  // Listen for viz:select event from ChatWorkspace
+  // Event: show gallery (reset to index)
   useEffect(() => {
-    const handleVizSelect = (e) => {
+    const handler = () => {
+      setSelectedProject(null)
+      setSelectedViz(null)
+    }
+    window.addEventListener('viz:showGallery', handler)
+    return () => window.removeEventListener('viz:showGallery', handler)
+  }, [])
+
+  // Event: select viz (from chat or project iframe via postMessage)
+  useEffect(() => {
+    const handleEvent = (e) => {
       const vizId = e.detail
-      console.log('🔍 VisualizationViewer: Received viz:select event for:', vizId)
       const viz = visualizations.find(v => v.id === vizId)
       if (viz) {
+        setSelectedProject(null)
         setSelectedViz(viz)
       }
     }
-
-    window.addEventListener('viz:select', handleVizSelect)
-    return () => window.removeEventListener('viz:select', handleVizSelect)
+    const handleMessage = (e) => {
+      if (e.data?.type === 'viz:select' && e.data?.vizId) {
+        const viz = visualizations.find(v => v.id === e.data.vizId)
+        if (viz) {
+          setSelectedProject(null)
+          setSelectedViz(viz)
+        }
+      }
+    }
+    window.addEventListener('viz:select', handleEvent)
+    window.addEventListener('message', handleMessage)
+    return () => {
+      window.removeEventListener('viz:select', handleEvent)
+      window.removeEventListener('message', handleMessage)
+    }
   }, [visualizations])
 
-  // Command+K keyboard shortcut to focus search, Escape to clear and blur
+  // Keyboard: Cmd+K to focus search, Escape to clear
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         searchInputRef.current?.focus()
@@ -118,83 +109,67 @@ export default function VisualizationViewer() {
         searchInputRef.current?.blur()
       }
     }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Restore viz from URL param on initial load
+  // URL: restore viz from ?viz= param on load
   useEffect(() => {
-    if (visualizations.length > 0 && !selectedViz) {
+    if (visualizations.length > 0 && !selectedViz && !initialRestoreAttempted) {
       const vizId = getVizIdFromUrl()
       if (vizId) {
         const viz = visualizations.find(v => v.id === vizId)
-        if (viz) {
-          console.log('🔗 VisualizationViewer: Restoring viz from URL:', vizId)
-          setSelectedViz(viz)
-        }
+        if (viz) setSelectedViz(viz)
       }
+      setInitialRestoreAttempted(true)
     }
-  }, [visualizations])
+  }, [visualizations, initialRestoreAttempted])
 
-  // Update URL when selectedViz changes
+  // URL: update ?viz= param when selection changes
   useEffect(() => {
-    const currentVizId = getVizIdFromUrl()
+    if (!initialRestoreAttempted) return
+    const currentVizId = new URLSearchParams(window.location.search).get('viz')
     if (selectedViz && selectedViz.id !== currentVizId) {
-      // Add viz ID to URL without full page reload
       const url = new URL(window.location.href)
       url.searchParams.set('viz', selectedViz.id)
       window.history.pushState({}, '', url)
-    } else if (!selectedViz && currentVizId && visualizations.length > 0) {
-      // Only remove viz param when going back to gallery AFTER vizzes loaded
-      // (prevents stripping URL before we can restore the viz)
+    } else if (!selectedViz && currentVizId) {
       const url = new URL(window.location.href)
       url.searchParams.delete('viz')
       window.history.pushState({}, '', url)
     }
-  }, [selectedViz, visualizations.length])
+  }, [selectedViz, initialRestoreAttempted])
 
-  // Handle browser back/forward buttons
+  // URL: handle browser back/forward
   useEffect(() => {
-    const handlePopState = () => {
+    const handler = () => {
       const vizId = getVizIdFromUrl()
       if (vizId) {
         const viz = visualizations.find(v => v.id === vizId)
-        if (viz) {
-          setSelectedViz(viz)
-        }
+        if (viz) setSelectedViz(viz)
       } else {
         setSelectedViz(null)
       }
     }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
+    window.addEventListener('popstate', handler)
+    return () => window.removeEventListener('popstate', handler)
   }, [visualizations])
 
-  // Check localStorage on mount for viz to open from LiveWorkspace
+  // LiveWorkspace integration: open viz from localStorage
   useEffect(() => {
     const vizToOpen = localStorage.getItem('vizViewer_openOnMount')
     if (vizToOpen && visualizations.length > 0) {
       localStorage.removeItem('vizViewer_openOnMount')
-
       try {
-        const vizFromLiveWorkspace = JSON.parse(vizToOpen)
-
-        // Try to find matching viz in visualizations list by id or filename
-        const matchingViz = visualizations.find(v =>
-          v.id === vizFromLiveWorkspace.id ||
-          v.filename === vizFromLiveWorkspace.filename
-        )
-
+        const vizData = JSON.parse(vizToOpen)
+        const matchingViz = visualizations.find(v => v.id === vizData.id || v.filename === vizData.filename)
         if (matchingViz) {
           setSelectedViz(matchingViz)
         } else {
-          // Construct a proper viz object with the right url format
-          const constructedViz = {
-            ...vizFromLiveWorkspace,
-            url: vizFromLiveWorkspace.filename ? `app/viz/${vizFromLiveWorkspace.filename}` : vizFromLiveWorkspace.url.replace(/^localbase:\/\//, '').replace(/\?t=\d+$/, '')
-          }
-          setSelectedViz(constructedViz)
+          setSelectedViz({
+            ...vizData,
+            url: vizData.filename ? `app/viz/${vizData.filename}` : vizData.url.replace(/^localbase:\/\//, '').replace(/\?t=\d+$/, '')
+          })
         }
       } catch (err) {
         console.error('Failed to parse viz from localStorage:', err)
@@ -202,22 +177,27 @@ export default function VisualizationViewer() {
     }
   }, [visualizations])
 
+  // Update iframe URL when viz changes
+  useEffect(() => {
+    if (selectedViz) {
+      setIframeUrl(buildVizUrl(selectedViz.url))
+    }
+  }, [selectedViz?.id, iframeKey])
+
+  // Handlers
   const handleDeleteClick = (e, viz) => {
-    e.stopPropagation() // Prevent card click
+    e.stopPropagation()
     setDeleteConfirm(viz)
   }
 
   const handleDeleteConfirm = async () => {
     if (!deleteConfirm) return
-
     const viz = deleteConfirm
     setDeleteConfirm(null)
     setDeletingId(viz.id)
-
     try {
       const result = await window.electronAPI.api.deleteVisualization(viz.id)
       if (result.success) {
-        // Remove from local state immediately
         setVisualizations(prev => prev.filter(v => v.id !== viz.id))
       } else {
         alert(`Failed to delete: ${result.error}`)
@@ -230,17 +210,12 @@ export default function VisualizationViewer() {
   }
 
   const handlePin = async (e, viz) => {
-    e.stopPropagation() // Prevent card click
-
+    e.stopPropagation()
     try {
       const newPinnedState = !viz.pinned
       const result = await window.electronAPI.api.toggleVizPin(viz.id, newPinnedState)
-
       if (result.success) {
-        // Update local state immediately
-        setVisualizations(prev => prev.map(v =>
-          v.id === viz.id ? { ...v, pinned: newPinnedState } : v
-        ))
+        setVisualizations(prev => prev.map(v => v.id === viz.id ? { ...v, pinned: newPinnedState } : v))
       } else {
         alert(`Failed to ${newPinnedState ? 'pin' : 'unpin'}: ${result.error}`)
       }
@@ -249,79 +224,30 @@ export default function VisualizationViewer() {
     }
   }
 
+  const handleVizClick = (viz) => {
+    const vizData = { id: viz.id, title: viz.title, filename: viz.filename, url: buildVizUrl(`viz/${viz.filename}`) }
+    localStorage.setItem('liveWorkspace_lastSession', JSON.stringify(vizData))
+    window.dispatchEvent(new CustomEvent('liveWorkspace:loadViz', { detail: viz }))
+    setSelectedViz(viz)
+  }
+
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Unknown'
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
-  // Memoize iframe URL to prevent unnecessary reloads
-  const [iframeUrl, setIframeUrl] = useState('')
-
-  useEffect(() => {
-    if (selectedViz) {
-      // Only update URL when selectedViz ID changes or iframeKey changes (manual refresh)
-      const url = buildVizUrl(selectedViz.url)
-      console.log('🔄 VisualizationViewer: Setting iframe URL:', { id: selectedViz.id, iframeKey })
-      setIframeUrl(url)
-    }
-  }, [selectedViz?.id, iframeKey])
-
-  // Show selected viz full-screen
-  if (selectedViz) {
-    console.log('🖼️ VisualizationViewer: Rendering full-screen view, iframeUrl:', iframeUrl, 'iframeKey:', iframeKey)
-    return (
-      <div className="h-full flex flex-col">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-green-400">{selectedViz.title}</h3>
-            <p className="text-xs text-muted-foreground">
-              {selectedViz.library} • {selectedViz.type} • {formatDate(selectedViz.createdAt)}
-            </p>
-            <p className="text-xs text-muted-foreground/60 font-mono mt-1 select-all cursor-text">
-              ID: {selectedViz.id} • app/viz/{selectedViz.filename}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelectedViz(null)}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4 mr-2" />
-            Back to Gallery
-          </Button>
-        </div>
-        <div className="flex-1 bg-background overflow-auto">
-          <iframe
-            key={iframeKey}
-            src={iframeUrl}
-            className="w-full h-full border-0"
-            title={selectedViz.title}
-            onLoad={() => console.log('✅ VisualizationViewer: Iframe loaded')}
-          />
-        </div>
-      </div>
-    )
-  }
-
-  // Get unique types from visualizations
+  // Computed values
+  const projects = [...new Set(visualizations.filter(v => v.project).map(v => v.project))].sort()
+  const projectCounts = projects.reduce((acc, p) => {
+    acc[p] = visualizations.filter(v => v.project === p).length
+    return acc
+  }, {})
   const vizTypes = [...new Set(visualizations.map(v => v.type))].sort()
 
-  // Filter visualizations by project, type, and search query, then sort by most recent first
   let filteredVisualizations = visualizations
-
-  // Apply project filter (from URL param)
-  if (projectFilter) {
-    filteredVisualizations = filteredVisualizations.filter(v => v.project === projectFilter)
-  }
-
-  // Apply type filter
   if (typeFilter !== 'all') {
     filteredVisualizations = filteredVisualizations.filter(v => v.type === typeFilter)
   }
-
-  // Apply search filter (search in title, filename, and id)
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase()
     filteredVisualizations = filteredVisualizations.filter(v =>
@@ -330,285 +256,152 @@ export default function VisualizationViewer() {
       v.id?.toLowerCase().includes(query)
     )
   }
-
-  // Sort by createdAt date (most recent first)
   filteredVisualizations = [...filteredVisualizations].sort((a, b) => {
-    const dateA = new Date(a.createdAt || a.created || 0)
-    const dateB = new Date(b.createdAt || b.created || 0)
-    return dateB - dateA // Newest first
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
   })
-
-  // Separate pinned and unpinned visualizations
   const pinnedViz = filteredVisualizations.filter(v => v.pinned)
   const unpinnedViz = filteredVisualizations.filter(v => !v.pinned)
 
-  // Show visualization gallery
+  // Render: Project presentation view
+  if (selectedProject) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-green-400">{selectedProject}</h3>
+            <p className="text-xs text-muted-foreground">
+              {projectCounts[selectedProject]} visualizations
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedProject(null)} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4 mr-1" /> Close
+          </Button>
+        </div>
+        <div className="flex-1">
+          <iframe src={buildVizUrl(`viz/projects/${selectedProject}/index.html`)} className="w-full h-full border-0" title={selectedProject} />
+        </div>
+      </div>
+    )
+  }
+
+  // Render: Single viz view
+  if (selectedViz) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div>
+            {selectedViz.project && (
+              <button onClick={() => { setSelectedViz(null); setSelectedProject(selectedViz.project) }} className="text-xs text-green-400 hover:text-green-300 mb-1 flex items-center gap-1">
+                <Presentation className="h-3 w-3" /> {selectedViz.project}
+              </button>
+            )}
+            <h3 className="text-lg font-semibold text-green-400">{selectedViz.title}</h3>
+            <p className="text-xs text-muted-foreground">
+              {selectedViz.library} • {selectedViz.type} • {formatDate(selectedViz.createdAt)}
+            </p>
+            <p className="text-xs text-muted-foreground/60 font-mono mt-1 select-all cursor-text">
+              ID: {selectedViz.id} • app/viz/{selectedViz.filename}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedViz(null)} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4 mr-2" /> Back to Gallery
+          </Button>
+        </div>
+        <div className="flex-1 bg-background overflow-auto">
+          <iframe key={iframeKey} src={iframeUrl} className="w-full h-full border-0" title={selectedViz.title} />
+        </div>
+      </div>
+    )
+  }
+
+  // Render: Gallery
   return (
     <div className="p-8">
-      {/* Project Filter Banner */}
-      {projectFilter && (
-        <div className="mb-4 flex items-center justify-between bg-green-400/10 border border-green-400/30 rounded-lg px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-green-400 font-semibold">Project:</span>
-            <span className="text-foreground">{projectFilter}</span>
-            <span className="text-muted-foreground text-sm">({filteredVisualizations.length} visualizations)</span>
+      {/* Projects Section */}
+      {projects.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Projects</h3>
+          <div className="flex flex-wrap gap-3">
+            {projects.map(project => (
+              <div key={project} className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-3 hover:border-green-400/50 transition-colors">
+                <div>
+                  <div className="font-medium text-foreground">{project}</div>
+                  <div className="text-xs text-muted-foreground">{projectCounts[project]} visualizations</div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setSelectedProject(project)} className="text-green-400 border-green-400/30 hover:bg-green-400/10">
+                  <Presentation className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setProjectFilter(null)
-              const url = new URL(window.location.href)
-              url.searchParams.delete('project')
-              window.history.pushState({}, '', url)
-            }}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Clear filter
-          </Button>
         </div>
       )}
 
+      {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h2 className="text-2xl font-bold text-green-400">Visualizations</h2>
           <p className="text-muted-foreground text-sm">Browse and view your LocalBase visualizations</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant={viewMode === 'grid' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('grid')}
-            className="gap-2"
-          >
-            <LayoutGrid className="h-4 w-4" />
-            Grid
+          <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')} className="gap-2">
+            <LayoutGrid className="h-4 w-4" /> Grid
           </Button>
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-            className="gap-2"
-          >
-            <List className="h-4 w-4" />
-            List
+          <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('list')} className="gap-2">
+            <List className="h-4 w-4" /> List
           </Button>
         </div>
       </div>
 
-      {/* Search Bar */}
+      {/* Search */}
       <div className="mb-4 relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Search visualizations by title, filename, or ID... (⌘K)"
+          placeholder="Search visualizations... (⌘K)"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:border-green-400 focus:outline-none transition-colors"
         />
         {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
+          <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      {/* Type Filter Pills */}
+      {/* Type Filter */}
       <div className="mb-6 flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Filter:</span>
-        <Button
-          variant={typeFilter === 'all' ? 'secondary' : 'ghost'}
-          size="sm"
-          onClick={() => setTypeFilter('all')}
-          className="h-8 px-3 text-xs"
-        >
+        <Button variant={typeFilter === 'all' ? 'secondary' : 'ghost'} size="sm" onClick={() => setTypeFilter('all')} className="h-8 px-3 text-xs">
           All ({visualizations.length})
         </Button>
-        {vizTypes.map(type => {
-          const count = visualizations.filter(v => v.type === type).length
-          return (
-            <Button
-              key={type}
-              variant={typeFilter === type ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setTypeFilter(type)}
-              className="h-8 px-3 text-xs capitalize"
-            >
-              {type} ({count})
-            </Button>
-          )
-        })}
+        {vizTypes.map(type => (
+          <Button key={type} variant={typeFilter === type ? 'secondary' : 'ghost'} size="sm" onClick={() => setTypeFilter(type)} className="h-8 px-3 text-xs capitalize">
+            {type} ({visualizations.filter(v => v.type === type).length})
+          </Button>
+        ))}
       </div>
 
       {/* Grid View */}
       {viewMode === 'grid' && (
         <>
-          {/* Pinned Section */}
           {pinnedViz.length > 0 && (
             <div className="mb-8">
               <h3 className="text-sm font-semibold text-yellow-400 mb-3 flex items-center gap-2">
-                <Star className="h-4 w-4 fill-yellow-400" />
-                Pinned ({pinnedViz.length})
+                <Star className="h-4 w-4 fill-yellow-400" /> Pinned ({pinnedViz.length})
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pinnedViz.map((viz) => (
-          <Card
-            key={viz.id}
-            className="group cursor-pointer transition-all hover:border-green-400/50 overflow-hidden"
-            onClick={() => {
-              console.log('🖱️ VisualizationViewer: Card clicked:', viz.title)
-
-              // Prepare viz data for LiveWorkspace
-              const vizData = {
-                id: viz.id,
-                title: viz.title,
-                filename: viz.filename,
-                url: buildVizUrl(`viz/${viz.filename}`)
-              }
-
-              // Save to localStorage (for when LiveWorkspace isn't mounted yet)
-              console.log('💾 VisualizationViewer: Saving to localStorage for LiveWorkspace')
-              localStorage.setItem('liveWorkspace_lastSession', JSON.stringify(vizData))
-
-              // Also dispatch event (for when LiveWorkspace IS already mounted)
-              console.log('📤 VisualizationViewer: Dispatching event to LiveWorkspace')
-              window.dispatchEvent(new CustomEvent('liveWorkspace:loadViz', { detail: viz }))
-
-              // Show in full-screen viewer
-              console.log('🖼️ VisualizationViewer: Opening full-screen view')
-              setSelectedViz(viz)
-            }}
-          >
-            <div className="flex gap-3 p-3">
-              {/* Icon placeholder (no iframe preview to avoid loading all visualizations) */}
-              <div className="w-20 h-20 flex-shrink-0 bg-background/50 relative overflow-hidden rounded border border-border/50 flex items-center justify-center">
-                <BarChart3 className="h-10 w-10 text-green-400/30" />
-              </div>
-              {/* Content */}
-              <div className="flex-1 min-w-0 py-1">
-                <div className="flex items-start gap-2 mb-1">
-                  <BarChart3 className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
-                  <h3 className="text-sm font-semibold leading-tight">{viz.title}</h3>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {viz.description || `Created ${formatDate(viz.createdAt)}`}
-                </p>
-                <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
-                  <span className="capitalize">{viz.type}</span>
-                  <span>•</span>
-                  <span>{viz.library}</span>
-                </div>
-              </div>
-              {/* Pin button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 transition-opacity ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                onClick={(e) => handlePin(e, viz)}
-              >
-                <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
-              </Button>
-              {/* Delete button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                onClick={(e) => handleDeleteClick(e, viz)}
-                disabled={deletingId === viz.id}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </Card>
-                ))}
+                {pinnedViz.map(viz => <VizCard key={viz.id} viz={viz} onClick={handleVizClick} onPin={handlePin} onDelete={handleDeleteClick} deletingId={deletingId} formatDate={formatDate} />)}
               </div>
             </div>
           )}
-
-          {/* All/Unpinned Section */}
           {unpinnedViz.length > 0 && (
             <div>
-              {pinnedViz.length > 0 && (
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                  All Visualizations ({unpinnedViz.length})
-                </h3>
-              )}
+              {pinnedViz.length > 0 && <h3 className="text-sm font-semibold text-muted-foreground mb-3">All Visualizations ({unpinnedViz.length})</h3>}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {unpinnedViz.map((viz) => (
-          <Card
-            key={viz.id}
-            className="group cursor-pointer transition-all hover:border-green-400/50 overflow-hidden"
-            onClick={() => {
-              console.log('🖱️ VisualizationViewer: Card clicked:', viz.title)
-
-              // Prepare viz data for LiveWorkspace
-              const vizData = {
-                id: viz.id,
-                title: viz.title,
-                filename: viz.filename,
-                url: buildVizUrl(`viz/${viz.filename}`)
-              }
-
-              // Save to localStorage (for when LiveWorkspace isn't mounted yet)
-              console.log('💾 VisualizationViewer: Saving to localStorage for LiveWorkspace')
-              localStorage.setItem('liveWorkspace_lastSession', JSON.stringify(vizData))
-
-              // Also dispatch event (for when LiveWorkspace IS already mounted)
-              console.log('📤 VisualizationViewer: Dispatching event to LiveWorkspace')
-              window.dispatchEvent(new CustomEvent('liveWorkspace:loadViz', { detail: viz }))
-
-              // Show in full-screen viewer
-              console.log('🖼️ VisualizationViewer: Opening full-screen view')
-              setSelectedViz(viz)
-            }}
-          >
-            <div className="flex gap-3 p-3">
-              {/* Icon placeholder (no iframe preview to avoid loading all visualizations) */}
-              <div className="w-20 h-20 flex-shrink-0 bg-background/50 relative overflow-hidden rounded border border-border/50 flex items-center justify-center">
-                <BarChart3 className="h-10 w-10 text-green-400/30" />
-              </div>
-              {/* Content */}
-              <div className="flex-1 min-w-0 py-1">
-                <div className="flex items-start gap-2 mb-1">
-                  <BarChart3 className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
-                  <h3 className="text-sm font-semibold leading-tight">{viz.title}</h3>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {viz.description || `Created ${formatDate(viz.createdAt)}`}
-                </p>
-                <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
-                  <span className="capitalize">{viz.type}</span>
-                  <span>•</span>
-                  <span>{viz.library}</span>
-                </div>
-              </div>
-              {/* Pin button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 transition-opacity ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                onClick={(e) => handlePin(e, viz)}
-              >
-                <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
-              </Button>
-              {/* Delete button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                onClick={(e) => handleDeleteClick(e, viz)}
-                disabled={deletingId === viz.id}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </Card>
-                ))}
+                {unpinnedViz.map(viz => <VizCard key={viz.id} viz={viz} onClick={handleVizClick} onPin={handlePin} onDelete={handleDeleteClick} deletingId={deletingId} formatDate={formatDate} />)}
               </div>
             </div>
           )}
@@ -618,143 +411,28 @@ export default function VisualizationViewer() {
       {/* List View */}
       {viewMode === 'list' && (
         <>
-          {/* Pinned Section */}
           {pinnedViz.length > 0 && (
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-yellow-400 mb-3 flex items-center gap-2">
-                <Star className="h-4 w-4 fill-yellow-400" />
-                Pinned ({pinnedViz.length})
+                <Star className="h-4 w-4 fill-yellow-400" /> Pinned ({pinnedViz.length})
               </h3>
               <div className="space-y-2">
-                {pinnedViz.map((viz) => (
-            <Card
-              key={viz.id}
-              className="group cursor-pointer transition-all hover:border-green-400/50"
-              onClick={() => {
-                console.log('🖱️ VisualizationViewer: Card clicked:', viz.title)
-
-                // Prepare viz data for LiveWorkspace
-                const vizData = {
-                  id: viz.id,
-                  title: viz.title,
-                  filename: viz.filename,
-                  url: buildVizUrl(`viz/${viz.filename}`)
-                }
-
-                // Save to localStorage (for when LiveWorkspace isn't mounted yet)
-                console.log('💾 VisualizationViewer: Saving to localStorage for LiveWorkspace')
-                localStorage.setItem('liveWorkspace_lastSession', JSON.stringify(vizData))
-
-                // Also dispatch event (for when LiveWorkspace IS already mounted)
-                console.log('📤 VisualizationViewer: Dispatching event to LiveWorkspace')
-                window.dispatchEvent(new CustomEvent('liveWorkspace:loadViz', { detail: viz }))
-
-                // Show in full-screen viewer
-                console.log('🖼️ VisualizationViewer: Opening full-screen view')
-                setSelectedViz(viz)
-              }}
-            >
-              <div className="flex items-center gap-4 p-4">
-                <BarChart3 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold truncate">{viz.title}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {viz.description || `Created ${formatDate(viz.createdAt)}`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="capitalize">{viz.type}</span>
-                  <span>{viz.library}</span>
-                  <span>{formatDate(viz.createdAt)}</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-8 w-8 transition-opacity flex-shrink-0 ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                  onClick={(e) => handlePin(e, viz)}
-                >
-                  <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0"
-                  onClick={(e) => handleDeleteClick(e, viz)}
-                  disabled={deletingId === viz.id}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </Card>
-                ))}
+                {pinnedViz.map(viz => <VizListItem key={viz.id} viz={viz} onClick={handleVizClick} onPin={handlePin} onDelete={handleDeleteClick} deletingId={deletingId} formatDate={formatDate} />)}
               </div>
             </div>
           )}
-
-          {/* All/Unpinned Section */}
           {unpinnedViz.length > 0 && (
             <div>
-              {pinnedViz.length > 0 && (
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                  All Visualizations ({unpinnedViz.length})
-                </h3>
-              )}
+              {pinnedViz.length > 0 && <h3 className="text-sm font-semibold text-muted-foreground mb-3">All Visualizations ({unpinnedViz.length})</h3>}
               <div className="space-y-2">
-                {unpinnedViz.map((viz) => (
-                  <Card
-                    key={viz.id}
-                    className="group cursor-pointer transition-all hover:border-green-400/50"
-                    onClick={() => {
-                      const vizData = {
-                        id: viz.id,
-                        title: viz.title,
-                        filename: viz.filename,
-                        url: buildVizUrl(`viz/${viz.filename}`)
-                      }
-                      localStorage.setItem('liveWorkspace_lastSession', JSON.stringify(vizData))
-                      window.dispatchEvent(new CustomEvent('liveWorkspace:loadViz', { detail: viz }))
-                      setSelectedViz(viz)
-                    }}
-                  >
-                    <div className="flex items-center gap-4 p-4">
-                      <BarChart3 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-semibold truncate">{viz.title}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {viz.description || `Created ${formatDate(viz.createdAt)}`}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span className="capitalize">{viz.type}</span>
-                        <span>{viz.library}</span>
-                        <span>{formatDate(viz.createdAt)}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={`h-8 w-8 transition-opacity flex-shrink-0 ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                        onClick={(e) => handlePin(e, viz)}
-                      >
-                        <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0"
-                        onClick={(e) => handleDeleteClick(e, viz)}
-                        disabled={deletingId === viz.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
+                {unpinnedViz.map(viz => <VizListItem key={viz.id} viz={viz} onClick={handleVizClick} onPin={handlePin} onDelete={handleDeleteClick} deletingId={deletingId} formatDate={formatDate} />)}
               </div>
             </div>
           )}
         </>
       )}
 
+      {/* Empty States */}
       {visualizations.length === 0 && (
         <div className="text-center text-muted-foreground py-12">
           <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -762,7 +440,6 @@ export default function VisualizationViewer() {
           <p className="text-xs mt-2">Create visualizations in LocalBase to see them here</p>
         </div>
       )}
-
       {visualizations.length > 0 && filteredVisualizations.length === 0 && (
         <div className="text-center text-muted-foreground py-12">
           <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -771,40 +448,76 @@ export default function VisualizationViewer() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setDeleteConfirm(null)}
-          />
-
-          {/* Modal */}
+          <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-card border border-border rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <h3 className="text-lg font-semibold mb-2">Delete "{deleteConfirm.title}"?</h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              This will permanently delete the visualization file and cannot be undone.
-            </p>
-
+            <p className="text-sm text-muted-foreground mb-6">This will permanently delete the visualization file and cannot be undone.</p>
             <div className="flex justify-end gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => setDeleteConfirm(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleDeleteConfirm}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Delete
-              </Button>
+              <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">Delete</Button>
             </div>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+// Sub-components
+function VizCard({ viz, onClick, onPin, onDelete, deletingId, formatDate }) {
+  return (
+    <Card className="group cursor-pointer transition-all hover:border-green-400/50 overflow-hidden" onClick={() => onClick(viz)}>
+      <div className="flex gap-3 p-3">
+        <div className="w-20 h-20 flex-shrink-0 bg-background/50 relative overflow-hidden rounded border border-border/50 flex items-center justify-center">
+          <BarChart3 className="h-10 w-10 text-green-400/30" />
+        </div>
+        <div className="flex-1 min-w-0 py-1">
+          <div className="flex items-start gap-2 mb-1">
+            <BarChart3 className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
+            <h3 className="text-sm font-semibold leading-tight">{viz.title}</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">{viz.description || `Created ${formatDate(viz.createdAt)}`}</p>
+          <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
+            <span className="capitalize">{viz.type}</span>
+            <span>•</span>
+            <span>{viz.library}</span>
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className={`h-8 w-8 transition-opacity ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={(e) => onPin(e, viz)}>
+          <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive" onClick={(e) => onDelete(e, viz)} disabled={deletingId === viz.id}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
+function VizListItem({ viz, onClick, onPin, onDelete, deletingId, formatDate }) {
+  return (
+    <Card className="group cursor-pointer transition-all hover:border-green-400/50" onClick={() => onClick(viz)}>
+      <div className="flex items-center gap-4 p-4">
+        <BarChart3 className="h-5 w-5 text-green-400 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold truncate">{viz.title}</h3>
+          <p className="text-xs text-muted-foreground">{viz.description || `Created ${formatDate(viz.createdAt)}`}</p>
+        </div>
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span className="capitalize">{viz.type}</span>
+          <span>{viz.library}</span>
+          <span>{formatDate(viz.createdAt)}</span>
+        </div>
+        <Button variant="ghost" size="icon" className={`h-8 w-8 transition-opacity flex-shrink-0 ${viz.pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={(e) => onPin(e, viz)}>
+          <Star className={`h-4 w-4 ${viz.pinned ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground hover:text-yellow-400'}`} />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0" onClick={(e) => onDelete(e, viz)} disabled={deletingId === viz.id}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </Card>
   )
 }

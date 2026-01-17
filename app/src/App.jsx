@@ -320,7 +320,8 @@ function App() {
             const Icon = item.icon
             const handleClick = () => {
               if (item.id === 'visualizations') {
-                setVizKey(prev => prev + 1) // Force remount
+                // Dispatch event to reset viz viewer to gallery (don't remount, just reset state)
+                window.dispatchEvent(new CustomEvent('viz:showGallery'))
               }
               setSelectedView(item.id)
             }
