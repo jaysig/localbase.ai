@@ -16,9 +16,7 @@ const buildVizUrl = (vizPath) => {
 
 export default function VisualizationViewer() {
   const [visualizations, setVisualizations] = useState([])
-  const [projectsWithPresentation, setProjectsWithPresentation] = useState([])
   const [selectedViz, setSelectedViz] = useState(null)
-  const [selectedProject, setSelectedProject] = useState(null)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('viz-view-mode') || 'grid')
   const [typeFilter, setTypeFilter] = useState(() => localStorage.getItem('viz-type-filter') || 'all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -42,7 +40,6 @@ export default function VisualizationViewer() {
       try {
         const data = await window.electronAPI.api.getVisualizations()
         setVisualizations(data.visualizations || [])
-        setProjectsWithPresentation(data.projectsWithPresentation || [])
       } catch (err) {
         console.error('Failed to fetch visualizations:', err)
       }
@@ -65,10 +62,7 @@ export default function VisualizationViewer() {
 
   // Event: show gallery (reset to index)
   useEffect(() => {
-    const handler = () => {
-      setSelectedProject(null)
-      setSelectedViz(null)
-    }
+    const handler = () => setSelectedViz(null)
     window.addEventListener('viz:showGallery', handler)
     return () => window.removeEventListener('viz:showGallery', handler)
   }, [])
@@ -78,18 +72,12 @@ export default function VisualizationViewer() {
     const handleEvent = (e) => {
       const vizId = e.detail
       const viz = visualizations.find(v => v.id === vizId)
-      if (viz) {
-        setSelectedProject(null)
-        setSelectedViz(viz)
-      }
+      if (viz) setSelectedViz(viz)
     }
     const handleMessage = (e) => {
       if (e.data?.type === 'viz:select' && e.data?.vizId) {
         const viz = visualizations.find(v => v.id === e.data.vizId)
-        if (viz) {
-          setSelectedProject(null)
-          setSelectedViz(viz)
-        }
+        if (viz) setSelectedViz(viz)
       }
     }
     window.addEventListener('viz:select', handleEvent)
@@ -239,11 +227,6 @@ export default function VisualizationViewer() {
   }
 
   // Computed values
-  const projects = [...new Set(visualizations.filter(v => v.project).map(v => v.project))].sort()
-  const projectCounts = projects.reduce((acc, p) => {
-    acc[p] = visualizations.filter(v => v.project === p).length
-    return acc
-  }, {})
   const vizTypes = [...new Set(visualizations.map(v => v.type))].sort()
 
   let filteredVisualizations = visualizations
@@ -264,28 +247,6 @@ export default function VisualizationViewer() {
   const pinnedViz = filteredVisualizations.filter(v => v.pinned)
   const unpinnedViz = filteredVisualizations.filter(v => !v.pinned)
 
-  // Render: Project presentation view
-  if (selectedProject) {
-    return (
-      <div className="h-full flex flex-col">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-green-400">{selectedProject}</h3>
-            <p className="text-xs text-muted-foreground">
-              {projectCounts[selectedProject]} visualizations
-            </p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => setSelectedProject(null)} className="text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4 mr-1" /> Close
-          </Button>
-        </div>
-        <div className="flex-1">
-          <iframe src={buildVizUrl(`viz/projects/${selectedProject}/index.html`)} className="w-full h-full border-0" title={selectedProject} />
-        </div>
-      </div>
-    )
-  }
-
   // Render: Single viz view
   if (selectedViz) {
     return (
@@ -293,7 +254,7 @@ export default function VisualizationViewer() {
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div>
             {selectedViz.project && (
-              <button onClick={() => { setSelectedViz(null); setSelectedProject(selectedViz.project) }} className="text-xs text-green-400 hover:text-green-300 mb-1 flex items-center gap-1">
+              <button onClick={() => window.dispatchEvent(new CustomEvent('navigate:project', { detail: selectedViz.project }))} className="text-xs text-green-400 hover:text-green-300 mb-1 flex items-center gap-1">
                 <Presentation className="h-3 w-3" /> {selectedViz.project}
               </button>
             )}
@@ -319,26 +280,6 @@ export default function VisualizationViewer() {
   // Render: Gallery
   return (
     <div className="p-8">
-      {/* Projects Section - only show projects that have presentation pages */}
-      {projects.filter(p => projectsWithPresentation.includes(p)).length > 0 && (
-        <div className="mb-8">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Projects</h3>
-          <div className="flex flex-wrap gap-3">
-            {projects.filter(p => projectsWithPresentation.includes(p)).map(project => (
-              <div key={project} className="flex items-center gap-3 bg-card border border-border rounded-lg px-4 py-3 hover:border-green-400/50 transition-colors">
-                <div>
-                  <div className="font-medium text-foreground">{project}</div>
-                  <div className="text-xs text-muted-foreground">{projectCounts[project]} visualizations</div>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => setSelectedProject(project)} className="text-green-400 border-green-400/30 hover:bg-green-400/10">
-                  <Presentation className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>

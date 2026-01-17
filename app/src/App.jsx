@@ -10,6 +10,7 @@ import {
   LineChart,
   Home as HomeIcon,
   FolderOpen,
+  FolderKanban,
   DollarSign,
   Users,
   TrendingUp,
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import Home from '@/components/Home'
 import Overview from '@/components/Overview'
 import VisualizationViewer from '@/components/VisualizationViewer'
+import ProjectsViewer from '@/components/ProjectsViewer'
 import ChatWorkspace from '@/components/ChatWorkspace'
 import SidebarChats from '@/components/SidebarChats'
 import { useVimiumShortcuts } from '@/hooks/useVimiumShortcuts'
@@ -86,6 +88,19 @@ function App() {
     const handler = (e) => setSelectedView(e.detail)
     window.addEventListener('app:switchTab', handler)
     return () => window.removeEventListener('app:switchTab', handler)
+  }, [])
+
+  // Listen for navigate:project events (from viz detail to project tab)
+  useEffect(() => {
+    const handler = (e) => {
+      setSelectedView('projects')
+      // Dispatch to ProjectsViewer to open specific project
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('projects:open', { detail: e.detail }))
+      }, 50)
+    }
+    window.addEventListener('navigate:project', handler)
+    return () => window.removeEventListener('navigate:project', handler)
   }, [])
 
   // Browser history management - prevent back button from exiting app
@@ -281,6 +296,7 @@ function App() {
     // Chat only in browser mode (replaces Terminal/Claude CLI workflow)
     ...(isBrowserMode ? [{ id: 'chat', label: 'Chat', icon: MessageSquare }] : []),
     { id: 'visualizations', label: 'Visualizations', icon: LineChart },
+    { id: 'projects', label: 'Projects', icon: FolderKanban },
   ]
 
   const settingsNavItems = [
@@ -401,6 +417,8 @@ function App() {
             />
           ) : selectedView === 'visualizations' ? (
             <VisualizationViewer key={vizKey} />
+          ) : selectedView === 'projects' ? (
+            <ProjectsViewer />
           ) : selectedView === 'settings' ? (
             <Overview onNavigateHome={() => setSelectedView('home')} />
           ) : selectedView === 'chat' ? (
