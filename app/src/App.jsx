@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { initBrowserAPI } from '@/lib/browserAPI'
+import { parseUrl, buildUrl } from '@/lib/router'
 
 // Initialize browser API shim if not in Electron
 initBrowserAPI()
@@ -34,7 +35,8 @@ const isBrowserMode = true
 // Components are mapped by ID to their path in @/components/
 // Add instance-specific components here (e.g., 'customers': () => import('@/components/crm/Customers'))
 const componentLoaders = {
-  'mediatrader': () => import('@/components/tools/MediaTrader'),
+  // Instance-specific components go here
+  // 'mediatrader': () => import('@/components/tools/MediaTrader'),
 }
 
 // Cache for loaded components
@@ -56,18 +58,26 @@ function App() {
   useVimiumShortcuts()
 
   const [currentWorkspace, setCurrentWorkspace] = useState('')
-  // Default to chat view, but restore from localStorage if available
-  // If ?viz= param is present, go straight to visualizations view
+
+  // Parse initial URL to determine starting view
   const [selectedView, setSelectedView] = useState(() => {
-    // Use URL captured in index.html before React loads (handles direct URL navigation)
-    const initialSearch = window.__INITIAL_SEARCH__ || window.location.search
-    console.log('🔍 App.jsx init - initialSearch:', initialSearch, '__INITIAL_SEARCH__:', window.__INITIAL_SEARCH__)
-    const params = new URLSearchParams(initialSearch)
-    if (params.get('viz') || params.get('project')) {
-      console.log('🔍 App.jsx - detected viz/project param, going to visualizations')
-      return 'visualizations'
-    }
-    return localStorage.getItem('localbase-selected-view') || 'chat'
+    const initialUrl = window.__INITIAL_SEARCH__
+      ? window.location.pathname + window.__INITIAL_SEARCH__
+      : window.location.pathname + window.location.search
+    const { view } = parseUrl(initialUrl)
+    return view
+  })
+
+  // Track current viz/project IDs from URL
+  const [currentVizId, setCurrentVizId] = useState(() => {
+    const initialUrl = window.location.pathname + window.location.search
+    const { vizId } = parseUrl(initialUrl)
+    return vizId
+  })
+  const [currentProjectId, setCurrentProjectId] = useState(() => {
+    const initialUrl = window.location.pathname + window.location.search
+    const { projectId } = parseUrl(initialUrl)
+    return projectId
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     return localStorage.getItem('localbase-sidebar-collapsed') === 'true'
@@ -88,15 +98,55 @@ function App() {
 
   // Listen for tab switch requests from components
   useEffect(() => {
-    const handler = (e) => setSelectedView(e.detail)
+    const handler = (e) => {
+      setSelectedView(e.detail)
+      // Clear viz/project IDs when switching tabs via event
+      setCurrentVizId(null)
+      setCurrentProjectId(null)
+    }
     window.addEventListener('app:switchTab', handler)
     return () => window.removeEventListener('app:switchTab', handler)
+  }, [])
+
+  // Listen for viz selection to update URL
+  useEffect(() => {
+    const handler = (e) => {
+      setCurrentVizId(e.detail || null)
+      if (e.detail) {
+        setSelectedView('visualizations')
+      }
+    }
+    window.addEventListener('viz:urlUpdate', handler)
+    return () => window.removeEventListener('viz:urlUpdate', handler)
+  }, [])
+
+  // Listen for project selection to update URL (supports both projectId and vizId)
+  useEffect(() => {
+    const handler = (e) => {
+      const detail = e.detail || {}
+      // Support both new format { projectId, vizId } and legacy string format
+      const projectId = typeof detail === 'object' ? detail.projectId : detail
+      const vizId = typeof detail === 'object' ? detail.vizId : null
+
+      setCurrentProjectId(projectId || null)
+      // Update viz ID in project context
+      if (vizId !== undefined) {
+        setCurrentVizId(vizId)
+      }
+      if (projectId) {
+        setSelectedView('projects')
+      }
+    }
+    window.addEventListener('project:urlUpdate', handler)
+    return () => window.removeEventListener('project:urlUpdate', handler)
   }, [])
 
   // Listen for navigate:project events (from viz detail to project tab)
   useEffect(() => {
     const handler = (e) => {
       setSelectedView('projects')
+      setCurrentProjectId(e.detail)
+      setCurrentVizId(null)
       // Dispatch to ProjectsViewer to open specific project
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('projects:open', { detail: e.detail }))
@@ -106,34 +156,47 @@ function App() {
     return () => window.removeEventListener('navigate:project', handler)
   }, [])
 
-  // Browser history management - prevent back button from exiting app
+  // Browser history management with URL routing
   useEffect(() => {
-    // Push initial state on mount
-    if (!window.history.state?.view) {
-      window.history.replaceState({ view: selectedView }, '', window.location.href)
-    }
+    // Set initial URL on mount (replace, don't push)
+    const initialUrl = buildUrl(selectedView, currentVizId, currentProjectId)
+    window.history.replaceState({ view: selectedView, vizId: currentVizId, projectId: currentProjectId }, '', initialUrl)
 
     const handlePopState = (e) => {
-      if (e.state?.view) {
-        setSelectedView(e.state.view)
-      } else {
-        // No previous state - stay on current view (don't exit)
-        window.history.pushState({ view: selectedView }, '', window.location.href)
+      // Parse URL on back/forward navigation
+      const { view, vizId, projectId } = parseUrl(window.location.pathname + window.location.search)
+      setSelectedView(view)
+      setCurrentVizId(vizId)
+      setCurrentProjectId(projectId)
+
+      // Notify viz viewer if navigating to a specific viz
+      if (vizId) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('viz:select', { detail: vizId }))
+        }, 50)
+      }
+      // Notify projects viewer if navigating to a specific project
+      if (projectId) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('projects:open', { detail: projectId }))
+        }, 50)
       }
     }
 
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [selectedView])
+  }, [])
 
-  // Push to history when view changes (for back button navigation)
+  // Update URL when view changes
   useEffect(() => {
-    // Only push if the current state is different
-    if (window.history.state?.view !== selectedView) {
-      // Preserve query params when changing views
-      window.history.pushState({ view: selectedView }, '', window.location.href)
+    const newUrl = buildUrl(selectedView, currentVizId, currentProjectId)
+    const currentUrl = window.location.pathname
+
+    // Only push if URL actually changed
+    if (newUrl !== currentUrl) {
+      window.history.pushState({ view: selectedView, vizId: currentVizId, projectId: currentProjectId }, '', newUrl)
     }
-  }, [selectedView])
+  }, [selectedView, currentVizId, currentProjectId])
 
   // Load current workspace name
   const loadWorkspace = async () => {
@@ -367,6 +430,10 @@ function App() {
               if (item.id === 'visualizations') {
                 // Dispatch event to reset viz viewer to gallery (don't remount, just reset state)
                 window.dispatchEvent(new CustomEvent('viz:showGallery'))
+                setCurrentVizId(null)
+              }
+              if (item.id === 'projects') {
+                setCurrentProjectId(null)
               }
               setSelectedView(item.id)
             }
@@ -447,7 +514,10 @@ function App() {
           ) : selectedView === 'visualizations' ? (
             <VisualizationViewer key={vizKey} />
           ) : selectedView === 'projects' ? (
-            <ProjectsViewer />
+            <ProjectsViewer
+              initialProjectId={currentProjectId}
+              initialVizId={currentVizId}
+            />
           ) : selectedView === 'settings' ? (
             <Overview onNavigateHome={() => setSelectedView('home')} />
           ) : selectedView === 'chat' ? (

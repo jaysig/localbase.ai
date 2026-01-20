@@ -14,10 +14,11 @@ const buildVizUrl = (vizPath) => {
   return `localbase://${path}?t=${timestamp}`
 }
 
-export default function ProjectsViewer() {
+export default function ProjectsViewer({ initialProjectId, initialVizId }) {
   const [projects, setProjects] = useState([])
   const [projectCounts, setProjectCounts] = useState({})
-  const [selectedProject, setSelectedProject] = useState(null)
+  const [selectedProject, setSelectedProject] = useState(initialProjectId || null)
+  const [currentVizId, setCurrentVizId] = useState(initialVizId || null)
   const [loading, setLoading] = useState(true)
 
   // Fetch projects from API
@@ -47,31 +48,54 @@ export default function ProjectsViewer() {
     fetchProjects()
   }, [])
 
-  // Listen for viz:select from project iframe
+  // Listen for viz:select from project iframe - update URL instead of switching tabs
   useEffect(() => {
     const handleMessage = (e) => {
-      if (e.data?.type === 'viz:select' && e.data?.vizId) {
-        // Navigate to visualization viewer with this viz
-        window.dispatchEvent(new CustomEvent('app:switchTab', { detail: 'visualizations' }))
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('viz:select', { detail: e.data.vizId }))
-        }, 50)
+      if (e.data?.type === 'viz:select' && e.data?.vizId && selectedProject) {
+        setCurrentVizId(e.data.vizId)
+        // Update URL with both project and viz IDs
+        window.dispatchEvent(new CustomEvent('project:urlUpdate', {
+          detail: { projectId: selectedProject, vizId: e.data.vizId }
+        }))
       }
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [])
+  }, [selectedProject])
 
   // Listen for projects:open events (from viz detail project link)
   useEffect(() => {
     const handler = (e) => {
       if (e.detail && projects.includes(e.detail)) {
         setSelectedProject(e.detail)
+        setCurrentVizId(null)
+        // Update URL with project ID
+        window.dispatchEvent(new CustomEvent('project:urlUpdate', {
+          detail: { projectId: e.detail, vizId: null }
+        }))
       }
     }
     window.addEventListener('projects:open', handler)
     return () => window.removeEventListener('projects:open', handler)
   }, [projects])
+
+  // Helper to select project and update URL
+  const handleProjectClick = (project) => {
+    setSelectedProject(project)
+    setCurrentVizId(null)
+    window.dispatchEvent(new CustomEvent('project:urlUpdate', {
+      detail: { projectId: project, vizId: null }
+    }))
+  }
+
+  // Helper to close project and update URL
+  const handleCloseProject = () => {
+    setSelectedProject(null)
+    setCurrentVizId(null)
+    window.dispatchEvent(new CustomEvent('project:urlUpdate', {
+      detail: { projectId: null, vizId: null }
+    }))
+  }
 
   // Project presentation view
   if (selectedProject) {
@@ -84,13 +108,13 @@ export default function ProjectsViewer() {
               {projectCounts[selectedProject]} visualizations
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setSelectedProject(null)} className="text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" size="sm" onClick={handleCloseProject} className="text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4 mr-1" /> Close
           </Button>
         </div>
         <div className="flex-1">
           <iframe
-            src={buildVizUrl(`viz/projects/${selectedProject}/index.html`)}
+            src={buildVizUrl(`viz/projects/${selectedProject}/index.html`) + (currentVizId ? `&viz=${currentVizId}` : '')}
             className="w-full h-full border-0"
             title={selectedProject}
           />
@@ -125,7 +149,7 @@ export default function ProjectsViewer() {
             <Card
               key={project}
               className="group cursor-pointer transition-all hover:border-green-400/50 overflow-hidden"
-              onClick={() => setSelectedProject(project)}
+              onClick={() => handleProjectClick(project)}
             >
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">

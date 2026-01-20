@@ -1,2 +1,0 @@
-- Add breadcrumb back to project on viz detail view (for vizzes with project tag)
-- Fix project URL persistence (state not maintained on navigation)

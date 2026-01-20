@@ -18,6 +18,8 @@ rsync -av --delete \
   --exclude 'node_modules' \
   --exclude 'dist' \
   --exclude '.DS_Store' \
+  --exclude 'src/components/tools/' \
+  --exclude 'src/components/crm/' \
   $FRAMEWORK_DIR/app/ $INSTANCE_DIR/app/
 
 # Sync tools/ framework
@@ -73,6 +75,8 @@ echo "   - extensions/"
 echo "   - projects/"
 echo "   - data/"
 echo "   - env.local"
+echo "   - app/src/components/tools/ (instance components)"
+echo "   - app/src/components/crm/ (instance components)"
 echo ""
 echo "📋 Next steps:"
 echo "   1. npm install (if package.json changed)"

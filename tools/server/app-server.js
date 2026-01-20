@@ -172,349 +172,8 @@ function switchWorkspace(workspacePath) {
 
   console.log(`🔄 Switched to workspace: ${currentWorkspace}`);
   console.log(`📁 New registry path: ${registry.registryPath}`);
+  console.log(`⚠️  Note: Extension routes from previous workspace are still mounted. Restart server to load new extension routes.`);
 }
-
-/**
- * GET /api/marketing-spend
- * Get marketing spend data from Google Ads, Facebook Ads, and Invoices
- * ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
- */
-app.get('/api/marketing-spend', (req, res) => {
-  const { startDate, endDate } = req.query;
-
-  if (!startDate || !endDate) {
-    return res.status(400).json({
-      success: false,
-      error: 'startDate and endDate are required'
-    });
-  }
-
-  console.log(`📊 Marketing spend request: ${startDate} to ${endDate}`);
-
-  try {
-    const result = businessFunnelAPI.getMarketingSpendByDates(startDate, endDate);
-
-    console.log(`✅ Returned ${result.total} data points`);
-
-    res.json({
-      success: true,
-      ...result
-    });
-  } catch (error) {
-    console.error(`❌ Marketing spend API error:`, error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-/**
- * GET /api/media-correlation/coas
- * Run COAS (Correlation on Ad Spend) analysis for a specific date range
- * Unlike traditional ROAS, COAS analyzes correlations between ad spend and outcomes
- * ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&campaignFilter=%25B2B%25
- */
-app.get('/api/media-correlation/coas', async (req, res) => {
-  const { startDate = '2024-01-01', endDate = '2025-12-31', campaignFilter = null, campaignTypeFilter = null } = req.query;
-
-  const filterInfo = [
-    campaignFilter ? `filter: ${campaignFilter}` : '',
-    campaignTypeFilter ? `type: ${campaignTypeFilter}` : ''
-  ].filter(Boolean).join(', ');
-  console.log(`📊 COAS analysis request: ${startDate} to ${endDate}${filterInfo ? ` (${filterInfo})` : ''}`);
-
-  try {
-    // Import and run the COAS analysis from current workspace
-    const analysisPath = join(currentWorkspace, 'projects/lead-lag-indicator/analysis/run-coas-analysis.cjs');
-
-    if (!existsSync(analysisPath)) {
-      return res.status(404).json({
-        success: false,
-        error: 'COAS analysis script not found'
-      });
-    }
-
-    // Use require for CommonJS module (clear cache to pick up changes)
-    delete require.cache[require.resolve(analysisPath)];
-    const { runCOASAnalysis } = require(analysisPath);
-    const results = runCOASAnalysis(startDate, endDate, currentWorkspace, campaignFilter, campaignTypeFilter);
-
-    console.log(`✅ COAS analysis complete: ${results.summary.months} months, $${results.summary.totalSpend.toLocaleString()} total spend`);
-
-    res.json({
-      success: true,
-      data: results
-    });
-  } catch (error) {
-    console.error(`❌ COAS analysis error:`, error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-/**
- * GET /api/call-metrics
- * Get call metrics from RingCentral data
- * ?range=today|yesterday|last7days|last30days|mtd|ytd|all
- */
-app.get('/api/call-metrics', (req, res) => {
-  const { range, startDate: customStart, endDate: customEnd } = req.query;
-
-  console.log(`📞 Call metrics request: range=${range}, customStart=${customStart}, customEnd=${customEnd}`);
-
-  try {
-    const db = new Database(join(currentWorkspace, 'data/ringcentral/ringcentral.db'));
-
-    let startDate, endDate, previousStartDate, previousEndDate;
-    const today = new Date();
-
-    // Handle custom date range
-    if (customStart && customEnd) {
-      startDate = customStart;
-      endDate = customEnd;
-
-      // Calculate previous period (same length)
-      const start = new Date(customStart);
-      const end = new Date(customEnd);
-      const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-
-      const prevEnd = new Date(start);
-      prevEnd.setDate(prevEnd.getDate() - 1);
-      const prevStart = new Date(prevEnd);
-      prevStart.setDate(prevStart.getDate() - diffDays);
-
-      previousStartDate = prevStart.toISOString().split('T')[0];
-      previousEndDate = prevEnd.toISOString().split('T')[0];
-    } else {
-
-    switch(range) {
-      case 'today':
-        startDate = today.toISOString().split('T')[0];
-        endDate = startDate;
-        previousStartDate = new Date(today);
-        previousStartDate.setDate(previousStartDate.getDate() - 1);
-        previousEndDate = previousStartDate.toISOString().split('T')[0];
-        previousStartDate = previousEndDate;
-        break;
-      case 'yesterday':
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        startDate = yesterday.toISOString().split('T')[0];
-        endDate = startDate;
-        const dayBefore = new Date(yesterday);
-        dayBefore.setDate(dayBefore.getDate() - 1);
-        previousStartDate = dayBefore.toISOString().split('T')[0];
-        previousEndDate = previousStartDate;
-        break;
-      case 'last7days':
-        const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        startDate = sevenDaysAgo.toISOString().split('T')[0];
-        endDate = today.toISOString().split('T')[0];
-        const fourteenDaysAgo = new Date(today);
-        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-        previousStartDate = fourteenDaysAgo.toISOString().split('T')[0];
-        previousEndDate = sevenDaysAgo.toISOString().split('T')[0];
-        break;
-      case 'last30days':
-        const thirtyDaysAgo = new Date(today);
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        startDate = thirtyDaysAgo.toISOString().split('T')[0];
-        endDate = today.toISOString().split('T')[0];
-        const sixtyDaysAgo = new Date(today);
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-        previousStartDate = sixtyDaysAgo.toISOString().split('T')[0];
-        previousEndDate = thirtyDaysAgo.toISOString().split('T')[0];
-        break;
-      case 'lastmonth':
-        const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-        startDate = lastMonthStart.toISOString().split('T')[0];
-        endDate = lastMonthEnd.toISOString().split('T')[0];
-        const twoMonthsAgoStart = new Date(today.getFullYear(), today.getMonth() - 2, 1);
-        const twoMonthsAgoEnd = new Date(today.getFullYear(), today.getMonth() - 1, 0);
-        previousStartDate = twoMonthsAgoStart.toISOString().split('T')[0];
-        previousEndDate = twoMonthsAgoEnd.toISOString().split('T')[0];
-        break;
-      case 'mtd':
-        startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-        endDate = today.toISOString().split('T')[0];
-        const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-        previousStartDate = prevMonthStart.toISOString().split('T')[0];
-        previousEndDate = prevMonthEnd.toISOString().split('T')[0];
-        break;
-      case 'ytd':
-        startDate = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
-        endDate = today.toISOString().split('T')[0];
-        const lastYearStart = new Date(today.getFullYear() - 1, 0, 1);
-        const lastYearEnd = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
-        previousStartDate = lastYearStart.toISOString().split('T')[0];
-        previousEndDate = lastYearEnd.toISOString().split('T')[0];
-        break;
-      case 'all':
-        startDate = '2020-01-01';
-        endDate = today.toISOString().split('T')[0];
-        previousStartDate = null;
-        previousEndDate = null;
-        break;
-      default:
-        startDate = new Date(today);
-        startDate.setDate(startDate.getDate() - 30);
-        startDate = startDate.toISOString().split('T')[0];
-        endDate = today.toISOString().split('T')[0];
-        previousStartDate = null;
-        previousEndDate = null;
-    }
-    } // Close the else block for custom date handling
-
-    // Get current period metrics
-    const current = db.prepare(`
-      SELECT
-        COUNT(*) as totalCalls,
-        SUM(CASE WHEN call_length >= 90 THEN 1 ELSE 0 END) as conversations,
-        SUM(CASE WHEN call_length >= 120 THEN 1 ELSE 0 END) as twoMinCalls,
-        SUM(CASE WHEN call_length >= 300 THEN 1 ELSE 0 END) as fiveMinCalls,
-        AVG(call_length) as avgDuration
-      FROM calls
-      WHERE result = 'Connected'
-        AND DATE(call_start_time) >= ?
-        AND DATE(call_start_time) <= ?
-    `).get(startDate, endDate);
-
-    current.conversationRate = current.totalCalls > 0 ? (current.conversations / current.totalCalls * 100) : 0;
-
-    // Get warm (known leads) vs cold call connect rates
-    const warmStats = db.prepare(`
-      SELECT
-        COUNT(*) as totalCalls,
-        SUM(CASE WHEN call_length >= 90 THEN 1 ELSE 0 END) as connects
-      FROM calls
-      WHERE result = 'Connected'
-        AND is_customer_call = 1
-        AND DATE(call_start_time) >= ?
-        AND DATE(call_start_time) <= ?
-    `).get(startDate, endDate);
-
-    const coldStats = db.prepare(`
-      SELECT
-        COUNT(*) as totalCalls,
-        SUM(CASE WHEN call_length >= 90 THEN 1 ELSE 0 END) as connects
-      FROM calls
-      WHERE result = 'Connected'
-        AND is_customer_call = 0
-        AND DATE(call_start_time) >= ?
-        AND DATE(call_start_time) <= ?
-    `).get(startDate, endDate);
-
-    current.warmCalls = warmStats.totalCalls || 0;
-    current.warmConnects = warmStats.connects || 0;
-    current.warmConnectRate = warmStats.totalCalls > 0 ? (warmStats.connects / warmStats.totalCalls * 100) : 0;
-    current.coldCalls = coldStats.totalCalls || 0;
-    current.coldConnects = coldStats.connects || 0;
-    current.coldConnectRate = coldStats.totalCalls > 0 ? (coldStats.connects / coldStats.totalCalls * 100) : 0;
-
-    // Get top caller for current period
-    const topCaller = db.prepare(`
-      SELECT from_user, COUNT(*) as call_count
-      FROM calls
-      WHERE result = 'Connected'
-        AND DATE(call_start_time) >= ?
-        AND DATE(call_start_time) <= ?
-        AND from_user IS NOT NULL
-      GROUP BY from_user
-      ORDER BY call_count DESC
-      LIMIT 1
-    `).get(startDate, endDate);
-
-    current.topCaller = topCaller?.from_user || '-';
-    current.topCallerCalls = topCaller?.call_count || 0;
-
-    // Get daily breakdown for sparkline
-    const daily = db.prepare(`
-      SELECT
-        DATE(call_start_time) as date,
-        COUNT(*) as total_calls
-      FROM calls
-      WHERE result = 'Connected'
-        AND DATE(call_start_time) >= ?
-        AND DATE(call_start_time) <= ?
-      GROUP BY DATE(call_start_time)
-      ORDER BY date ASC
-    `).all(startDate, endDate);
-
-    // Get previous period metrics if applicable
-    let previous = null;
-    if (previousStartDate && previousEndDate) {
-      previous = db.prepare(`
-        SELECT
-          COUNT(*) as totalCalls,
-          SUM(CASE WHEN call_length >= 90 THEN 1 ELSE 0 END) as conversations,
-          SUM(CASE WHEN call_length >= 120 THEN 1 ELSE 0 END) as twoMinCalls,
-          SUM(CASE WHEN call_length >= 300 THEN 1 ELSE 0 END) as fiveMinCalls,
-          AVG(call_length) as avgDuration
-        FROM calls
-        WHERE result = 'Connected'
-          AND DATE(call_start_time) >= ?
-          AND DATE(call_start_time) <= ?
-      `).get(previousStartDate, previousEndDate);
-
-      previous.conversationRate = previous.totalCalls > 0 ? (previous.conversations / previous.totalCalls * 100) : 0;
-
-      // Get warm vs cold for previous period
-      const prevWarmStats = db.prepare(`
-        SELECT
-          COUNT(*) as totalCalls,
-          SUM(CASE WHEN call_length >= 90 THEN 1 ELSE 0 END) as connects
-        FROM calls
-        WHERE result = 'Connected'
-          AND is_customer_call = 1
-          AND DATE(call_start_time) >= ?
-          AND DATE(call_start_time) <= ?
-      `).get(previousStartDate, previousEndDate);
-
-      const prevColdStats = db.prepare(`
-        SELECT
-          COUNT(*) as totalCalls,
-          SUM(CASE WHEN call_length >= 90 THEN 1 ELSE 0 END) as connects
-        FROM calls
-        WHERE result = 'Connected'
-          AND is_customer_call = 0
-          AND DATE(call_start_time) >= ?
-          AND DATE(call_start_time) <= ?
-      `).get(previousStartDate, previousEndDate);
-
-      previous.warmCalls = prevWarmStats.totalCalls || 0;
-      previous.warmConnects = prevWarmStats.connects || 0;
-      previous.warmConnectRate = prevWarmStats.totalCalls > 0 ? (prevWarmStats.connects / prevWarmStats.totalCalls * 100) : 0;
-      previous.coldCalls = prevColdStats.totalCalls || 0;
-      previous.coldConnects = prevColdStats.connects || 0;
-      previous.coldConnectRate = prevColdStats.totalCalls > 0 ? (prevColdStats.connects / prevColdStats.totalCalls * 100) : 0;
-    }
-
-    db.close();
-
-    console.log(`✅ Returned call metrics: ${current.totalCalls} calls, ${current.conversations} conversations`);
-
-    res.json({
-      success: true,
-      current,
-      previous,
-      daily,
-      dateRange: { start: startDate, end: endDate }
-    });
-
-  } catch (error) {
-    console.error(`❌ Call metrics API error:`, error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
 
 /**
  * GET /api/metrics/:metricId
@@ -1558,66 +1217,6 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
 });
 
 /**
- * POST /api/signals/refresh
- * Regenerate the signals data by running query-signals.cjs
- * Query params:
- *   - weeks: number of weeks ago to compare (e.g., ?weeks=2 compares 2 weeks ago vs 3 weeks ago)
- *   - date1 & date2: compare specific date ranges (e.g., ?date1=2025-12-08&date2=2025-12-01)
- */
-app.post('/api/signals/refresh', async (req, res) => {
-  try {
-    const { weeks, date1, date2 } = req.query;
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
-    // Security: Validate parameters FIRST to prevent command injection
-    if (date1 || date2) {
-      if (!date1 || !date2 || !datePattern.test(date1) || !datePattern.test(date2)) {
-        return res.status(400).json({ success: false, error: 'Invalid date format. Use YYYY-MM-DD' });
-      }
-    } else if (weeks) {
-      const weeksNum = parseInt(weeks, 10);
-      if (isNaN(weeksNum) || weeksNum < 1 || weeksNum > 52) {
-        return res.status(400).json({ success: false, error: 'Invalid weeks parameter. Use 1-52' });
-      }
-    }
-
-    const signalsScript = join(currentWorkspace, 'projects/mediatrader-signals/query-signals.cjs');
-
-    if (!existsSync(signalsScript)) {
-      return res.status(404).json({ success: false, error: 'Signals script not found' });
-    }
-
-    // Build command with validated parameters
-    let command = `node "${signalsScript}"`;
-
-    if (date1 && date2) {
-      command += ` --date1 ${date1} --date2 ${date2}`;
-    } else if (weeks) {
-      command += ` --weeks ${parseInt(weeks, 10)}`;
-    }
-
-    console.log(`🔄 Refreshing signals data... (${command})`);
-
-    const output = execSync(command, {
-      cwd: currentWorkspace,
-      encoding: 'utf-8',
-      timeout: 120000, // 2 minute timeout
-      env: { ...process.env }
-    });
-
-    console.log(`✅ Signals refresh completed`);
-    res.json({ success: true, output });
-  } catch (error) {
-    console.error('Signals refresh error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      output: error.stdout || error.stderr || ''
-    });
-  }
-});
-
-/**
  * GET /api/datasources
  * List data sources from data/data-sources.json
  */
@@ -1776,283 +1375,6 @@ app.post('/api/db/query', (req, res) => {
     }
   } catch (error) {
     console.error('Database query error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-/**
- * GET /api/mediatrader/datasource-stats
- * Get file stats (size, last modified) for all data sources in MediaTrader config
- * Returns: { [sourceId]: { fileSize, lastUpdate, exists } }
- */
-app.get('/api/mediatrader/datasource-stats', (req, res) => {
-  try {
-    // Load MediaTrader config from workspace
-    const configPaths = [
-      join(currentWorkspace, 'extensions/mediatrader/config.json'),
-      join(currentWorkspace, 'tools/mediatrader/config.json')
-    ];
-
-    let config = null;
-    for (const configPath of configPaths) {
-      if (existsSync(configPath)) {
-        try {
-          const configData = readFileSync(configPath, 'utf-8');
-          config = JSON.parse(configData);
-          break;
-        } catch (err) {
-          console.error('❌ Error parsing MediaTrader config:', err);
-        }
-      }
-    }
-
-    if (!config) {
-      return res.json({ success: false, error: 'MediaTrader config not found', stats: {} });
-    }
-
-    // Collect all unique data source paths
-    const sources = [...(config.channels || []), ...(config.conversionSources || [])];
-    const stats = {};
-
-    // Track which files we've already checked to avoid duplicate stat calls
-    const fileStatsCache = {};
-
-    for (const source of sources) {
-      if (!source.dataSource) continue;
-
-      const filePath = join(currentWorkspace, source.dataSource);
-
-      // Use cached stats if we already checked this file
-      if (!fileStatsCache[filePath]) {
-        if (existsSync(filePath)) {
-          const fileStat = statSync(filePath);
-          const sizeBytes = fileStat.size;
-          const mtime = fileStat.mtime;
-
-          // Format file size
-          let fileSize;
-          if (sizeBytes < 1024) {
-            fileSize = `${sizeBytes} B`;
-          } else if (sizeBytes < 1024 * 1024) {
-            fileSize = `${(sizeBytes / 1024).toFixed(1)} KB`;
-          } else if (sizeBytes < 1024 * 1024 * 1024) {
-            fileSize = `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
-          } else {
-            fileSize = `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-          }
-
-          // Format last update time
-          const now = new Date();
-          const diff = now - mtime;
-          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-          let lastUpdate;
-          if (days === 0) {
-            lastUpdate = 'Updated today';
-          } else if (days === 1) {
-            lastUpdate = 'Updated yesterday';
-          } else if (days < 7) {
-            lastUpdate = `Updated ${days} days ago`;
-          } else {
-            lastUpdate = mtime.toLocaleDateString();
-          }
-
-          fileStatsCache[filePath] = { exists: true, fileSize, lastUpdate };
-        } else {
-          fileStatsCache[filePath] = { exists: false, fileSize: 'N/A', lastUpdate: 'N/A' };
-        }
-      }
-
-      stats[source.id] = fileStatsCache[filePath];
-    }
-
-    res.json({ success: true, stats });
-  } catch (error) {
-    console.error('Error getting datasource stats:', error);
-    res.status(500).json({ success: false, error: error.message, stats: {} });
-  }
-});
-
-/**
- * POST /api/mediatrader/query
- * Query MediaTrader data source using config-driven system
- * Body: { sourceId: "google-ads", options: { aggregation: 'sum' } }
- */
-app.post('/api/mediatrader/query', (req, res) => {
-  try {
-    const { sourceId, options = {} } = req.body;
-
-    if (!sourceId) {
-      return res.status(400).json({
-        success: false,
-        error: 'sourceId is required'
-      });
-    }
-
-    // Load MediaTrader config from workspace
-    const configPaths = [
-      join(currentWorkspace, 'extensions/mediatrader/config.json'),
-      join(currentWorkspace, 'tools/mediatrader/config.json')
-    ];
-
-    let config = null;
-    for (const configPath of configPaths) {
-      if (existsSync(configPath)) {
-        try {
-          const configData = readFileSync(configPath, 'utf-8');
-          config = JSON.parse(configData);
-          break;
-        } catch (err) {
-          console.error('❌ Error parsing MediaTrader config:', err);
-        }
-      }
-    }
-
-    if (!config) {
-      console.warn('⚠️ MediaTrader config not found');
-      return res.json([]);
-    }
-
-    // Find source in channels or conversionSources
-    const source = [...(config.channels || []), ...(config.conversionSources || [])].find(s => s.id === sourceId);
-
-    if (!source) {
-      console.warn(`⚠️ Source "${sourceId}" not found in config`);
-      return res.json([]);
-    }
-
-    if (!source.enabled) {
-      console.warn(`⚠️ Source "${sourceId}" is disabled`);
-      return res.json([]);
-    }
-
-    // Handle JSON data sources (monthly format from admin dashboard)
-    if (source.dataSource.endsWith('.json')) {
-      const jsonPath = join(currentWorkspace, source.dataSource);
-
-      if (!existsSync(jsonPath)) {
-        console.warn(`⚠️ JSON file not found: ${jsonPath}`);
-        return res.json([]);
-      }
-
-      const jsonData = JSON.parse(readFileSync(jsonPath, 'utf-8'));
-
-      // Handle json-monthly format (e.g., business-signups-monthly.json)
-      if (source.dateFormat === 'json-monthly' && jsonData.monthly) {
-        const results = Object.entries(jsonData.monthly).map(([month, value]) => ({
-          month,
-          value: typeof value === 'number' ? value : parseInt(value, 10)
-        })).sort((a, b) => a.month.localeCompare(b.month));
-
-        console.log(`✅ MediaTrader: Got ${results.length} rows for "${sourceId}" (JSON monthly)`);
-        return res.json(results);
-      }
-
-      // Fallback: return empty if format not recognized
-      console.warn(`⚠️ Unknown JSON format for "${sourceId}"`);
-      return res.json([]);
-    }
-
-    // Handle CSV data sources
-    if (source.dataSource.endsWith('.csv')) {
-      const { startDate = '2024-01-01', endDate = '2025-12-31' } = options;
-      const csvPath = join(currentWorkspace, source.dataSource);
-
-      if (!existsSync(csvPath)) {
-        console.warn(`⚠️ CSV file not found: ${csvPath}`);
-        return res.json([]);
-      }
-
-      const csvData = readFileSync(csvPath, 'utf-8');
-      const lines = csvData.trim().split('\n').slice(1);
-      const results = lines
-        .map(line => {
-          const [month, value] = line.split(',');
-          return { month, value: parseInt(value, 10) };
-        })
-        .filter(row => {
-          const monthDate = row.month.includes('-') ? `${row.month}-01` : row.month;
-          return monthDate >= startDate && monthDate <= endDate;
-        });
-
-      console.log(`✅ MediaTrader: Got ${results.length} rows for "${sourceId}" (CSV)`);
-      return res.json(results);
-    }
-
-    // Handle SQLite data sources
-    if (source.dataSource.endsWith('.sqlite') || source.dataSource.endsWith('.db')) {
-      const { startDate = '2022-01-01', endDate = '2025-12-31', aggregation = 'count' } = options;
-      const dbPath = join(currentWorkspace, source.dataSource);
-
-      if (!existsSync(dbPath)) {
-        console.warn(`⚠️ Database not found: ${dbPath}`);
-        return res.json([]);
-      }
-
-      const db = new Database(dbPath, { readonly: true });
-
-      // Determine what to aggregate
-      let aggregateSQL = 'COUNT(*) as count';
-      if (aggregation === 'sum' && source.costField) {
-        aggregateSQL = `SUM([${source.costField}]) as spend`;
-      } else if ((aggregation === 'sum' || aggregation === 'count') && source.valueField) {
-        aggregateSQL = `SUM([${source.valueField}]) as value`;
-      }
-
-      // Handle different date formats
-      let monthExpression;
-      let dateFieldExpression = `[${source.dateField}]`;
-
-      if (source.dateFormat === 'month') {
-        monthExpression = `[${source.dateField}]`;
-      } else if (source.dateFormat === 'unixepoch') {
-        dateFieldExpression = `datetime(CASE WHEN [${source.dateField}] > 1000000000000 THEN [${source.dateField}]/1000 ELSE [${source.dateField}] END, 'unixepoch')`;
-        monthExpression = `strftime('%Y-%m', datetime(CASE WHEN [${source.dateField}] > 1000000000000 THEN [${source.dateField}]/1000 ELSE [${source.dateField}] END, 'unixepoch'))`;
-      } else {
-        monthExpression = `strftime('%Y-%m', [${source.dateField}])`;
-      }
-
-      // Build WHERE clause
-      let whereClause = `WHERE ${dateFieldExpression} IS NOT NULL
-          AND ${dateFieldExpression} >= ?
-          AND ${dateFieldExpression} <= ?`;
-
-      if (source.filterField && source.filterValue) {
-        whereClause += `\n      AND [${source.filterField}] = '${source.filterValue}'`;
-      }
-
-      if (source.whereClause) {
-        whereClause += `\n      AND ${source.whereClause}`;
-      }
-
-      const query = `
-        SELECT
-          ${monthExpression} as month,
-          ${aggregateSQL}
-        FROM ${source.table}
-        ${whereClause}
-        GROUP BY month
-        ORDER BY month
-      `;
-
-      try {
-        const results = db.prepare(query).all(startDate, endDate);
-        db.close();
-        console.log(`✅ MediaTrader: Got ${results.length} rows for "${sourceId}" (SQLite)`);
-        return res.json(results);
-      } catch (queryErr) {
-        db.close();
-        console.error(`❌ Query error for "${sourceId}":`, queryErr.message);
-        return res.json([]);
-      }
-    }
-
-    console.warn(`⚠️ Unknown data source type: ${source.dataSource}`);
-    res.json([]);
-  } catch (error) {
-    console.error(`❌ Error querying MediaTrader source:`, error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -2279,8 +1601,56 @@ app.use('/data', (req, res, next) => {
 // Note: UI is served by Vite dev server on port 5173 during development
 // Port 3000 is API-only. For production, run `npm run build` and serve app/dist separately.
 
-// Start server
-app.listen(PORT, '0.0.0.0', () => {
+/**
+ * Load extension routes from extensions/{ext-id}/routes.js
+ * Each routes.js should export a function that receives (router, workspace) and registers routes
+ * Routes are mounted at /api/ext/{extension-id}/
+ */
+async function loadExtensionRoutes() {
+  const extensionsDir = join(currentWorkspace, 'extensions');
+
+  if (!existsSync(extensionsDir)) {
+    return;
+  }
+
+  const entries = readdirSync(extensionsDir).filter(item => {
+    const itemPath = join(extensionsDir, item);
+    return statSync(itemPath).isDirectory() && !item.startsWith('.');
+  });
+
+  for (const extId of entries) {
+    const routesPath = join(extensionsDir, extId, 'routes.js');
+
+    if (existsSync(routesPath)) {
+      try {
+        // Dynamic import of the routes module
+        const routesModule = await import(`file://${routesPath}`);
+
+        if (typeof routesModule.default === 'function') {
+          // Create a sub-router for this extension
+          const extRouter = express.Router();
+
+          // Pass the router and workspace to the extension's route setup function
+          await routesModule.default(extRouter, currentWorkspace);
+
+          // Mount at /api/ext/{extension-id}
+          app.use(`/api/ext/${extId}`, extRouter);
+          console.log(`   🔌 Loaded extension routes: /api/ext/${extId}`);
+        } else {
+          console.warn(`   ⚠️  Extension ${extId}/routes.js does not export a default function`);
+        }
+      } catch (err) {
+        console.error(`   ❌ Failed to load routes for extension ${extId}:`, err.message);
+      }
+    }
+  }
+}
+
+// Start server (async to allow extension route loading)
+(async () => {
+  await loadExtensionRoutes();
+
+  app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 LocalBase API server running on http://localhost:${PORT}`);
   console.log(`📁 Viz served from: ${vizDir}`);
   console.log(`📋 API endpoints:`);
@@ -2291,4 +1661,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   GET    /api/viz                - List all visualizations`);
   console.log(`   GET    /health                 - Health check`);
   console.log(`   GET    /*                      - Static files`);
-});
+  });
+})();

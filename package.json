@@ -46,8 +46,15 @@
     "analytics",
     "local-first",
     "sqlite",
-    "localbase"
+    "localbase",
+    "claude",
+    "mcp"
   ],
-  "author": "Ryan",
-  "license": "MIT"
+  "author": "Ryan Riggin",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rriggin/localbase.ai"
+  },
+  "homepage": "https://github.com/rriggin/localbase.ai"
 }

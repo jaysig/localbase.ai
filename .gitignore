@@ -122,4 +122,8 @@ connectors/**/gmail_token.json
 connectors/**/gmail_credentials.json
 connectors/**/*.token.json
 connectors/**/*_credentials.json
-projects/
+# Instance-specific projects (analysis, etc.)
+/projects/
+
+# Keep viz projects (presentation views)
+!viz/projects/

@@ -1,10 +1,5 @@
 {
   "_comment": "Extension component registry - maps component IDs to their import paths",
   "_note": "Add instance-specific components to componentLoaders in app/src/App.jsx",
-  "components": {
-    "mediatrader": {
-      "path": "tools/MediaTrader",
-      "framework": true
-    }
-  }
+  "components": {}
 }

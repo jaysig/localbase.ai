@@ -218,6 +218,8 @@ export default function VisualizationViewer() {
     const vizData = { id: viz.id, title: viz.title, filename: viz.filename, url: buildVizUrl(`viz/${viz.filename}`) }
     localStorage.setItem('liveWorkspace_lastSession', JSON.stringify(vizData))
     window.dispatchEvent(new CustomEvent('liveWorkspace:loadViz', { detail: viz }))
+    // Update URL with viz ID
+    window.dispatchEvent(new CustomEvent('viz:urlUpdate', { detail: viz.id }))
     setSelectedViz(viz)
   }
 
@@ -266,7 +268,7 @@ export default function VisualizationViewer() {
               ID: {selectedViz.id} • app/viz/{selectedViz.filename}
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setSelectedViz(null)} className="text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" size="sm" onClick={() => { setSelectedViz(null); window.dispatchEvent(new CustomEvent('viz:urlUpdate', { detail: null })) }} className="text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4 mr-2" /> Back to Gallery
           </Button>
         </div>

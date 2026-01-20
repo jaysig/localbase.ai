@@ -88,6 +88,20 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser. You're in.
 
+## How to Use This
+
+Pick your style:
+
+| Mode | Setup | Who it's for |
+|------|-------|--------------|
+| **Browser** | Everything in one window | Just want to ask questions and see answers |
+| **Split** | Terminal left, browser right | The default. Ask Claude, see results update live |
+| **Code** | Terminal left, terminal right | Building connectors, customizing, power users |
+
+Start with Browser mode. When you're ready for more control, open a terminal next to your browser. When you want to build things, go full terminal.
+
+There's no wrong way. The terminal isn't scary - you've just been told it is.
+
 ## Data Setup
 
 The `data/` folder contains your SQLite databases. It's gitignored (not included in the repo) because it holds your actual business data.
