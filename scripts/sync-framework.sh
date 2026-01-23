@@ -57,6 +57,13 @@ for f in $FRAMEWORK_DIR/viz/*.html; do
   [ -e "$f" ] && cp "$f" $INSTANCE_DIR/viz/ 2>/dev/null || true
 done
 
+# Sync templates/ (project templates, etc.)
+echo "📦 Syncing templates/..."
+mkdir -p $INSTANCE_DIR/templates
+rsync -av --delete \
+  --exclude '.DS_Store' \
+  $FRAMEWORK_DIR/templates/ $INSTANCE_DIR/templates/
+
 # Clean up old directories that no longer exist in framework
 for OLD_DIR in electron-app web-app tools/connectors; do
   if [ -d "$INSTANCE_DIR/$OLD_DIR" ]; then
@@ -77,6 +84,9 @@ echo "   - data/"
 echo "   - env.local"
 echo "   - app/src/components/tools/ (instance components)"
 echo "   - app/src/components/crm/ (instance components)"
+echo ""
+echo "📦 TEMPLATES (synced, copy to use):"
+echo "   - templates/projects/task-agent → cp to projects/my-agent"
 echo ""
 echo "📋 Next steps:"
 echo "   1. npm install (if package.json changed)"
