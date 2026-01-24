@@ -163,6 +163,45 @@ export class VizRegistry {
   }
 
   /**
+   * Get agent projects (projects with agent.json in projects/{name}/)
+   */
+  getAgentProjects() {
+    const projectsDir = 'projects';
+    const agentProjects = [];
+
+    try {
+      if (existsSync(projectsDir)) {
+        const dirs = readdirSync(projectsDir, { withFileTypes: true });
+        for (const dir of dirs) {
+          if (dir.isDirectory()) {
+            const agentJsonPath = join(projectsDir, dir.name, 'agent.json');
+            if (existsSync(agentJsonPath)) {
+              try {
+                const agentConfig = JSON.parse(readFileSync(agentJsonPath, 'utf8'));
+                agentProjects.push({
+                  id: dir.name,
+                  name: agentConfig.name || dir.name,
+                  description: agentConfig.description || '',
+                  version: agentConfig.version || '1.0.0',
+                  tasks: agentConfig.tasks || [],
+                  inputs: agentConfig.inputs || {},
+                  outputs: agentConfig.outputs || {}
+                });
+              } catch (parseError) {
+                console.warn(`Could not parse agent.json for ${dir.name}:`, parseError.message);
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Could not read projects directory:', error.message);
+    }
+
+    return agentProjects;
+  }
+
+  /**
    * Get visualizations by type
    */
   async getByType(type) {

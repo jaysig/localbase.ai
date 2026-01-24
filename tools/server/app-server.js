@@ -318,10 +318,12 @@ app.get('/api/viz', async (req, res) => {
   try {
     const allViz = await registry.getAll();
     const projectsWithPresentation = registry.getProjectsWithPresentation();
+    const agentProjects = registry.getAgentProjects();
     res.json({
       success: true,
       visualizations: allViz,
       projectsWithPresentation,
+      agentProjects,
       total: allViz.length
     });
   } catch (error) {
