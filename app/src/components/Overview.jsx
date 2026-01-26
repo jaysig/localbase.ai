@@ -280,6 +280,7 @@ export default function Overview({ onNavigateHome }) {
       name: 'HubSpot',
       description: 'CRM, contacts, deals, and meetings',
       icon: '🟠',
+      authType: 'api-key',
       envVars: ['HUBSPOT_ACCESS_TOKEN'],
       docsUrl: 'https://developers.hubspot.com/docs/api/private-apps'
     },
@@ -288,7 +289,9 @@ export default function Overview({ onNavigateHome }) {
       name: 'QuickBooks',
       description: 'Invoices, customers, and financial data',
       icon: '💚',
-      envVars: ['QUICKBOOKS_CLIENT_ID', 'QUICKBOOKS_CLIENT_SECRET', 'QUICKBOOKS_ACCESS_TOKEN', 'QUICKBOOKS_REFRESH_TOKEN', 'QUICKBOOKS_COMPANY_ID'],
+      authType: 'oauth',
+      oauthUrl: 'https://benevolent-malabi-37c3f8.netlify.app/.netlify/functions/oauth',
+      envVars: ['QUICKBOOKS_ACCESS_TOKEN', 'QUICKBOOKS_REFRESH_TOKEN', 'QUICKBOOKS_COMPANY_ID'],
       docsUrl: 'https://developer.intuit.com/'
     }
   ]
@@ -618,73 +621,118 @@ export default function Overview({ onNavigateHome }) {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Step 1 */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">1</div>
-                    <h3 className="font-medium">Create a Private App in {template.name}</h3>
-                  </div>
-                  <div className="ml-8 space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      {template.id === 'hubspot' && (
-                        <>Go to Settings → Integrations → Private Apps → Create private app. Name it <code className="bg-muted px-1 py-0.5 rounded">LocalBase</code> and upload <code className="bg-muted px-1 py-0.5 rounded">icon-256.png</code> from your app/public folder</>
-                      )}
-                      {template.id === 'quickbooks' && 'Go to developer.intuit.com and create an app'}
-                    </p>
-                    <a
-                      href={template.docsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-green-400 hover:underline flex items-center gap-1"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      View API Documentation
-                    </a>
-                  </div>
-                </div>
-
-                {/* Step 2 */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">2</div>
-                    <h3 className="font-medium">
-                      {template.id === 'hubspot' && 'Grant required scopes'}
-                      {template.id === 'quickbooks' && 'Configure OAuth settings'}
-                    </h3>
-                  </div>
-                  <div className="ml-8">
-                    <p className="text-sm text-muted-foreground">
-                      {template.id === 'hubspot' && 'Enable read access for: crm.objects.contacts, crm.objects.deals, crm.objects.companies'}
-                      {template.id === 'quickbooks' && 'Set up OAuth redirect URLs and note your client credentials'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 3 - Enter credentials */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">3</div>
-                    <h3 className="font-medium">Enter your credentials</h3>
-                  </div>
-                  <div className="ml-8 space-y-3">
-                    {template.envVars.map(varName => (
-                      <div key={varName} className="space-y-1">
-                        <Label htmlFor={varName} className="text-xs font-mono">{varName}</Label>
-                        <Input
-                          id={varName}
-                          type="password"
-                          placeholder={varName === 'HUBSPOT_ACCESS_TOKEN' ? 'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' : '••••••••'}
-                          value={connectorCredentials[varName] || ''}
-                          onChange={(e) => setConnectorCredentials(prev => ({
-                            ...prev,
-                            [varName]: e.target.value
-                          }))}
-                          className="font-mono text-sm"
-                        />
+                {template.authType === 'oauth' ? (
+                  /* OAuth Flow (QuickBooks) */
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">1</div>
+                        <h3 className="font-medium">Connect to {template.name}</h3>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="ml-8 space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                          Click the button below to connect your {template.name} account. You'll be redirected to {template.name} to authorize access.
+                        </p>
+                        <Button
+                          onClick={() => window.open(template.oauthUrl, '_blank')}
+                          className="bg-green-400 text-black hover:bg-green-500"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Connect to {template.name}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">2</div>
+                        <h3 className="font-medium">Paste your credentials</h3>
+                      </div>
+                      <div className="ml-8 space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                          After authorizing, copy the credentials and paste them below:
+                        </p>
+                        {template.envVars.map(varName => (
+                          <div key={varName} className="space-y-1">
+                            <Label htmlFor={varName} className="text-xs font-mono">{varName}</Label>
+                            <Input
+                              id={varName}
+                              type="password"
+                              placeholder="••••••••"
+                              value={connectorCredentials[varName] || ''}
+                              onChange={(e) => setConnectorCredentials(prev => ({
+                                ...prev,
+                                [varName]: e.target.value
+                              }))}
+                              className="font-mono text-sm"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* API Key Flow (HubSpot) */
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">1</div>
+                        <h3 className="font-medium">Create a Private App in {template.name}</h3>
+                      </div>
+                      <div className="ml-8 space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          Go to Settings → Integrations → Private Apps → Create private app. Name it <code className="bg-muted px-1 py-0.5 rounded">LocalBase</code> and upload <code className="bg-muted px-1 py-0.5 rounded">icon-256.png</code> from your app/public folder
+                        </p>
+                        <a
+                          href={template.docsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-green-400 hover:underline flex items-center gap-1"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          View API Documentation
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">2</div>
+                        <h3 className="font-medium">Grant required scopes</h3>
+                      </div>
+                      <div className="ml-8">
+                        <p className="text-sm text-muted-foreground">
+                          Enable read access for: crm.objects.contacts, crm.objects.deals, crm.objects.companies
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">3</div>
+                        <h3 className="font-medium">Enter your credentials</h3>
+                      </div>
+                      <div className="ml-8 space-y-3">
+                        {template.envVars.map(varName => (
+                          <div key={varName} className="space-y-1">
+                            <Label htmlFor={varName} className="text-xs font-mono">{varName}</Label>
+                            <Input
+                              id={varName}
+                              type="password"
+                              placeholder={varName === 'HUBSPOT_ACCESS_TOKEN' ? 'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' : '••••••••'}
+                              value={connectorCredentials[varName] || ''}
+                              onChange={(e) => setConnectorCredentials(prev => ({
+                                ...prev,
+                                [varName]: e.target.value
+                              }))}
+                              className="font-mono text-sm"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
               <div className="p-4 pt-0 flex gap-2">
                 <Button
