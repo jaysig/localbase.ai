@@ -1,0 +1,13 @@
+{
+  "name": "localbase-landing",
+  "version": "1.0.0",
+  "description": "LocalBase landing page",
+  "main": "server.js",
+  "scripts": {
+    "build": "echo 'No build needed'",
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
