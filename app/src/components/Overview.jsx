@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Database, Loader2, FolderOpen, RefreshCw, Check, X, Edit, Save } from 'lucide-react'
+import { Database, Loader2, FolderOpen, RefreshCw, Check, X, Edit, Save, Plus, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -70,6 +70,11 @@ export default function Overview({ onNavigateHome }) {
   const [supabaseUrl, setSupabaseUrl] = useState('')
   const [supabaseKey, setSupabaseKey] = useState('')
   const [savingDatabase, setSavingDatabase] = useState(false)
+  const [showAddConnector, setShowAddConnector] = useState(false)
+  const [installingConnector, setInstallingConnector] = useState(null)
+  const [configuringConnector, setConfiguringConnector] = useState(null)
+  const [connectorCredentials, setConnectorCredentials] = useState({})
+  const [savingCredentials, setSavingCredentials] = useState(false)
 
   // Load project root on mount
   useEffect(() => {
@@ -268,6 +273,96 @@ export default function Overview({ onNavigateHome }) {
     }
   }
 
+  // Available connector templates
+  const availableConnectors = [
+    {
+      id: 'hubspot',
+      name: 'HubSpot',
+      description: 'CRM, contacts, deals, and meetings',
+      icon: '🟠',
+      envVars: ['HUBSPOT_ACCESS_TOKEN'],
+      docsUrl: 'https://developers.hubspot.com/docs/api/private-apps'
+    },
+    {
+      id: 'quickbooks',
+      name: 'QuickBooks',
+      description: 'Invoices, customers, and financial data',
+      icon: '💚',
+      envVars: ['QUICKBOOKS_CLIENT_ID', 'QUICKBOOKS_CLIENT_SECRET', 'QUICKBOOKS_ACCESS_TOKEN', 'QUICKBOOKS_REFRESH_TOKEN', 'QUICKBOOKS_COMPANY_ID'],
+      docsUrl: 'https://developer.intuit.com/'
+    }
+  ]
+
+  const handleConfigureConnector = (connector) => {
+    // Initialize credentials state for this connector
+    const template = availableConnectors.find(c => c.id === connector.id)
+    if (template) {
+      const initialCreds = {}
+      template.envVars.forEach(v => initialCreds[v] = '')
+      setConnectorCredentials(initialCreds)
+    }
+    setConfiguringConnector(connector)
+  }
+
+  const handleSaveCredentials = async () => {
+    setSavingCredentials(true)
+    try {
+      const result = await fetch('http://localhost:3000/api/env/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vars: connectorCredentials })
+      }).then(r => r.json())
+
+      if (result.success) {
+        setConfiguringConnector(null)
+        setConnectorCredentials({})
+        // Refresh connectors to show updated status
+        if (window.electronAPI?.api?.getConnectors) {
+          const connectorsResult = await window.electronAPI.api.getConnectors()
+          if (connectorsResult.success) {
+            setConnectors(connectorsResult.connectors || [])
+          }
+        }
+      } else {
+        alert(`Failed to save credentials: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error saving credentials:', error)
+      alert(`Error saving credentials: ${error.message}`)
+    } finally {
+      setSavingCredentials(false)
+    }
+  }
+
+  const handleInstallConnector = async (connectorId) => {
+    setInstallingConnector(connectorId)
+    try {
+      const result = await fetch('http://localhost:3000/api/connectors/install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectorId })
+      }).then(r => r.json())
+
+      if (result.success) {
+        // Refresh connectors list
+        if (window.electronAPI?.api?.getConnectors) {
+          const connectorsResult = await window.electronAPI.api.getConnectors()
+          if (connectorsResult.success) {
+            setConnectors(connectorsResult.connectors || [])
+          }
+        }
+        setShowAddConnector(false)
+      } else {
+        alert(`Failed to install connector: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error installing connector:', error)
+      alert(`Error installing connector: ${error.message}`)
+    } finally {
+      setInstallingConnector(null)
+    }
+  }
+
   // Show setup modal when changing project
   if (showingSetup) {
     return (
@@ -323,10 +418,112 @@ export default function Overview({ onNavigateHome }) {
         </p>
       </div>
 
+      {/* Add Connector Modal */}
+      {showAddConnector && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-lg mx-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5 text-green-400" />
+                Add Connector
+              </CardTitle>
+              <CardDescription>
+                Select a connector to install in your workspace
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {availableConnectors.map((connector) => {
+                const isInstalled = connectors.some(c => c.id === connector.id)
+                return (
+                  <div
+                    key={connector.id}
+                    className={`p-4 border rounded-lg transition-all ${
+                      isInstalled
+                        ? 'border-green-400/30 bg-green-400/5'
+                        : 'border-border hover:border-green-400/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">{connector.icon}</span>
+                        <div>
+                          <h3 className="font-medium">{connector.name}</h3>
+                          <p className="text-sm text-muted-foreground">{connector.description}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <a
+                              href={connector.docsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-green-400 hover:underline flex items-center gap-1"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              API Docs
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        {isInstalled ? (
+                          <span className="text-xs text-green-400 flex items-center gap-1">
+                            <Check className="h-3 w-3" />
+                            Installed
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => handleInstallConnector(connector.id)}
+                            disabled={installingConnector === connector.id}
+                            className="bg-green-400 text-black hover:bg-green-500"
+                          >
+                            {installingConnector === connector.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              'Install'
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {!isInstalled && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-xs text-muted-foreground mb-1">Required env vars:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {connector.envVars.map(v => (
+                            <code key={v} className="text-xs bg-muted px-1.5 py-0.5 rounded">{v}</code>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </CardContent>
+            <div className="p-4 pt-0">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowAddConnector(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Connectors */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Active Connectors</h2>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowAddConnector(true)}
+            className="border-green-400/50 text-green-400 hover:bg-green-400/10"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Connector
+          </Button>
         </div>
 
         {connectorsLoading ? (
@@ -368,21 +565,33 @@ export default function Overview({ onNavigateHome }) {
                     <span className="text-muted-foreground">
                       Last sync: {connector.lastSync}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${
-                        connector.status === 'active' ? 'bg-green-400' :
-                        connector.status === 'missing-index' ? 'bg-orange-400' :
-                        'bg-red-400'
-                      }`} />
-                      <span className={`text-xs ${
-                        connector.status === 'active' ? 'text-green-400' :
-                        connector.status === 'missing-index' ? 'text-orange-400' :
-                        'text-red-400'
-                      }`}>
-                        {connector.status === 'active' ? 'Active' :
-                         connector.status === 'missing-index' ? 'Missing index.js' :
-                         'Needs Fix'}
-                      </span>
+                    <div className="flex items-center gap-3">
+                      {connector.status === 'needs-fix' && availableConnectors.some(c => c.id === connector.id) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleConfigureConnector(connector)}
+                          className="h-7 text-xs border-green-400/50 text-green-400 hover:bg-green-400/10"
+                        >
+                          Configure
+                        </Button>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <div className={`h-2 w-2 rounded-full ${
+                          connector.status === 'active' ? 'bg-green-400' :
+                          connector.status === 'missing-index' ? 'bg-orange-400' :
+                          'bg-red-400'
+                        }`} />
+                        <span className={`text-xs ${
+                          connector.status === 'active' ? 'text-green-400' :
+                          connector.status === 'missing-index' ? 'text-orange-400' :
+                          'text-red-400'
+                        }`}>
+                          {connector.status === 'active' ? 'Active' :
+                           connector.status === 'missing-index' ? 'Missing index.js' :
+                           'Needs Fix'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -391,6 +600,124 @@ export default function Overview({ onNavigateHome }) {
           </div>
         )}
       </div>
+
+      {/* Configure Connector Modal */}
+      {configuringConnector && (() => {
+        const template = availableConnectors.find(c => c.id === configuringConnector.id)
+        if (!template) return null
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-lg mx-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-2xl">{template.icon}</span>
+                  Configure {template.name}
+                </CardTitle>
+                <CardDescription>
+                  Follow these steps to connect your {template.name} account
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Step 1 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">1</div>
+                    <h3 className="font-medium">Create a Private App in {template.name}</h3>
+                  </div>
+                  <div className="ml-8 space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      {template.id === 'hubspot' && (
+                        <>Go to Settings → Integrations → Private Apps → Create private app. Name it <code className="bg-muted px-1 py-0.5 rounded">LocalBase</code> and upload <code className="bg-muted px-1 py-0.5 rounded">icon-256.png</code> from your app/public folder</>
+                      )}
+                      {template.id === 'quickbooks' && 'Go to developer.intuit.com and create an app'}
+                    </p>
+                    <a
+                      href={template.docsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-green-400 hover:underline flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      View API Documentation
+                    </a>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">2</div>
+                    <h3 className="font-medium">
+                      {template.id === 'hubspot' && 'Grant required scopes'}
+                      {template.id === 'quickbooks' && 'Configure OAuth settings'}
+                    </h3>
+                  </div>
+                  <div className="ml-8">
+                    <p className="text-sm text-muted-foreground">
+                      {template.id === 'hubspot' && 'Enable read access for: crm.objects.contacts, crm.objects.deals, crm.objects.companies'}
+                      {template.id === 'quickbooks' && 'Set up OAuth redirect URLs and note your client credentials'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3 - Enter credentials */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded-full bg-green-400 text-black flex items-center justify-center text-sm font-bold">3</div>
+                    <h3 className="font-medium">Enter your credentials</h3>
+                  </div>
+                  <div className="ml-8 space-y-3">
+                    {template.envVars.map(varName => (
+                      <div key={varName} className="space-y-1">
+                        <Label htmlFor={varName} className="text-xs font-mono">{varName}</Label>
+                        <Input
+                          id={varName}
+                          type="password"
+                          placeholder={varName === 'HUBSPOT_ACCESS_TOKEN' ? 'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' : '••••••••'}
+                          value={connectorCredentials[varName] || ''}
+                          onChange={(e) => setConnectorCredentials(prev => ({
+                            ...prev,
+                            [varName]: e.target.value
+                          }))}
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+              <div className="p-4 pt-0 flex gap-2">
+                <Button
+                  onClick={handleSaveCredentials}
+                  disabled={savingCredentials || Object.values(connectorCredentials).some(v => !v)}
+                  className="flex-1 bg-green-400 text-black hover:bg-green-500"
+                >
+                  {savingCredentials ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Credentials
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setConfiguringConnector(null)
+                    setConnectorCredentials({})
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )
+      })()}
 
       {/* Data Sources */}
       <div className="space-y-4">

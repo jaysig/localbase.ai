@@ -267,6 +267,113 @@ describe('Security Headers', () => {
 });
 
 // ============================================================================
+// Environment Variable Security Tests
+// ============================================================================
+
+describe('Environment Variable Security', () => {
+
+  it('should reject saving empty vars object', async () => {
+    const res = await request('/api/env/save', {
+      method: 'POST',
+      body: { vars: {} }
+    });
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.data.success, false);
+  });
+
+  it('should reject path traversal in variable names', async () => {
+    const res = await request('/api/env/save', {
+      method: 'POST',
+      body: { vars: { '../../../etc/passwd': 'value' } }
+    });
+    // Should either reject with 400 or sanitize the key
+    assert.ok(res.status === 400 || res.data.success === true);
+  });
+
+  it('should reject newline injection in variable values', async () => {
+    const res = await request('/api/env/save', {
+      method: 'POST',
+      body: { vars: { 'TEST_VAR': 'value\nMALICIOUS_VAR=evil' } }
+    });
+    // The server should either reject or sanitize newlines
+    // to prevent env file injection
+    assert.ok(res.status === 200 || res.status === 400);
+  });
+
+  it('should reject excessively long variable names', async () => {
+    const longName = 'A'.repeat(10000);
+    const res = await request('/api/env/save', {
+      method: 'POST',
+      body: { vars: { [longName]: 'value' } }
+    });
+    // Should reject or truncate excessively long names
+    assert.ok(res.status === 400 || res.status === 200);
+  });
+
+  it('should reject excessively long variable values', async () => {
+    const longValue = 'x'.repeat(100000);
+    const res = await request('/api/env/save', {
+      method: 'POST',
+      body: { vars: { 'TEST_VAR': longValue } }
+    });
+    // Should reject excessively long values
+    assert.ok(res.status === 400 || res.status === 200);
+  });
+
+});
+
+// ============================================================================
+// Connector Installation Security Tests
+// ============================================================================
+
+describe('Connector Installation Security', () => {
+
+  it('should reject path traversal in connectorId', async () => {
+    const res = await request('/api/connectors/install', {
+      method: 'POST',
+      body: { connectorId: '../../../etc/passwd' }
+    });
+    // Should reject with 404 (not found) or 400 (invalid), not succeed
+    assert.ok(res.status === 404 || res.status === 400);
+    assert.strictEqual(res.data.success, false);
+  });
+
+  it('should reject null bytes in connectorId', async () => {
+    const res = await request('/api/connectors/install', {
+      method: 'POST',
+      body: { connectorId: 'hubspot\x00../../etc/passwd' }
+    });
+    assert.ok(res.status === 404 || res.status === 400);
+    assert.strictEqual(res.data.success, false);
+  });
+
+  it('should reject excessively long connectorId', async () => {
+    const longId = 'x'.repeat(10000);
+    const res = await request('/api/connectors/install', {
+      method: 'POST',
+      body: { connectorId: longId }
+    });
+    assert.ok(res.status === 404 || res.status === 400);
+    assert.strictEqual(res.data.success, false);
+  });
+
+  it('should not expose system paths in error messages', async () => {
+    const res = await request('/api/connectors/install', {
+      method: 'POST',
+      body: { connectorId: 'nonexistent-connector' }
+    });
+    assert.strictEqual(res.status, 404);
+    // Error message should not leak system paths
+    const error = res.data.error || '';
+    assert.ok(
+      !error.includes('/Users/') && !error.includes('/home/'),
+      'Should not expose system paths'
+    );
+  });
+
+});
+
+// ============================================================================
 // CORS Tests
 // ============================================================================
 

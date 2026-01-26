@@ -1156,8 +1156,10 @@ app.get('/api/connectors', (req, res) => {
           const possibleDirs = [
             join(currentWorkspace, 'data', dir.replace(/-/g, '_')),  // g2-api -> g2_api
             join(currentWorkspace, 'data', dir),                      // exact match
-            join(currentWorkspace, 'data', `${dir.replace(/-/g, '_')}_deals`),   // hubspot -> hubspot_deals
+            join(currentWorkspace, 'data', `${dir.replace(/-/g, '_')}_contacts`),  // hubspot -> hubspot_contacts
+            join(currentWorkspace, 'data', `${dir.replace(/-/g, '_')}_deals`),     // hubspot -> hubspot_deals
             join(currentWorkspace, 'data', `${dir.replace(/-/g, '_')}_companies`), // hubspot -> hubspot_companies
+            join(currentWorkspace, 'data', `${dir.replace(/-/g, '_')}_meetings`),  // hubspot -> hubspot_meetings
             join(currentWorkspace, 'data', `${dir.replace(/-api$/, '').replace(/-/g, '-')}-visits`), // g2-api -> g2-visits
           ];
 
@@ -1225,6 +1227,150 @@ app.get('/api/connectors', (req, res) => {
   } catch (error) {
     console.error('Error listing connectors:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/connectors/install
+ * Install a connector template to the current workspace
+ */
+app.post('/api/connectors/install', (req, res) => {
+  try {
+    const { connectorId } = req.body;
+
+    if (!connectorId) {
+      return res.status(400).json({
+        success: false,
+        error: 'connectorId is required'
+      });
+    }
+
+    // Connector template sources (in order of preference)
+    const templateSources = [
+      join(homedir(), 'Work', 'goskills', 'connectors', connectorId),
+      join(homedir(), 'Work', 'partnernomics-localbase', 'connectors', connectorId),
+      join(homedir(), 'Work', 'renu', 'connectors', connectorId)
+    ];
+
+    // Find the template
+    let templatePath = null;
+    for (const source of templateSources) {
+      if (existsSync(source)) {
+        templatePath = source;
+        break;
+      }
+    }
+
+    if (!templatePath) {
+      return res.status(404).json({
+        success: false,
+        error: `Connector template '${connectorId}' not found`
+      });
+    }
+
+    // Target path in current workspace
+    const targetPath = join(currentWorkspace, 'connectors', connectorId);
+
+    // Check if already installed
+    if (existsSync(targetPath)) {
+      return res.status(400).json({
+        success: false,
+        error: `Connector '${connectorId}' is already installed`
+      });
+    }
+
+    // Copy the connector directory
+    const { cpSync } = require('fs');
+    cpSync(templatePath, targetPath, { recursive: true });
+
+    console.log(`📦 Installed connector: ${connectorId} from ${templatePath}`);
+
+    res.json({
+      success: true,
+      message: `Connector '${connectorId}' installed successfully`,
+      path: targetPath
+    });
+  } catch (error) {
+    console.error('Error installing connector:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/env/save
+ * Save environment variables to env.local
+ */
+app.post('/api/env/save', (req, res) => {
+  try {
+    const { vars } = req.body;
+
+    if (!vars || typeof vars !== 'object' || Array.isArray(vars)) {
+      return res.status(400).json({
+        success: false,
+        error: 'vars object is required'
+      });
+    }
+
+    // Check for empty vars object
+    if (Object.keys(vars).length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'vars object cannot be empty'
+      });
+    }
+
+    const envPath = join(currentWorkspace, 'env.local');
+
+    // Read existing env.local content
+    let existingContent = '';
+    if (existsSync(envPath)) {
+      existingContent = readFileSync(envPath, 'utf-8');
+    }
+
+    // Parse existing vars (simple KEY=value format)
+    const existingVars = {};
+    existingContent.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const eqIndex = trimmed.indexOf('=');
+        if (eqIndex > 0) {
+          const key = trimmed.substring(0, eqIndex);
+          const value = trimmed.substring(eqIndex + 1);
+          existingVars[key] = value;
+        }
+      }
+    });
+
+    // Merge new vars (overwrite existing)
+    Object.entries(vars).forEach(([key, value]) => {
+      if (value) {
+        existingVars[key] = value;
+      }
+    });
+
+    // Rebuild env.local content
+    let newContent = '# LocalBase environment variables\n';
+    newContent += '# Do not commit this file to version control\n\n';
+    Object.entries(existingVars).forEach(([key, value]) => {
+      newContent += `${key}=${value}\n`;
+    });
+
+    writeFileSync(envPath, newContent);
+    console.log(`💾 Saved ${Object.keys(vars).length} env vars to ${envPath}`);
+
+    res.json({
+      success: true,
+      message: `Saved ${Object.keys(vars).length} environment variables`
+    });
+  } catch (error) {
+    console.error('Error saving env vars:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 
