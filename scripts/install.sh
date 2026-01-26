@@ -15,12 +15,29 @@ BOLD='\033[1m'
 
 # Config
 REPO="https://github.com/localbase-ai/localbase.ai.git"
-INSTALL_DIR="$HOME/localbase"
+DEFAULT_DIR="$HOME/localbase"
 
 echo ""
 echo -e "${GREEN}╔═══════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║${NC}         ${BOLD}LocalBase Installer${NC}              ${GREEN}║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════╝${NC}"
+echo ""
+
+# Prompt for install directory
+echo -e "${BOLD}Where would you like to install LocalBase?${NC}"
+echo -e "  Default: ${GREEN}$DEFAULT_DIR${NC}"
+echo ""
+read -p "Install directory (press Enter for default): " CUSTOM_DIR
+
+if [ -z "$CUSTOM_DIR" ]; then
+    INSTALL_DIR="$DEFAULT_DIR"
+else
+    # Expand ~ to $HOME
+    INSTALL_DIR="${CUSTOM_DIR/#\~/$HOME}"
+fi
+
+echo ""
+echo -e "Installing to: ${GREEN}$INSTALL_DIR${NC}"
 echo ""
 
 # Check for git
