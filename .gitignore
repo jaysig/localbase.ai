@@ -127,3 +127,4 @@ connectors/**/*_credentials.json
 
 # Keep viz projects (presentation views)
 !viz/projects/
+app/.vite/
