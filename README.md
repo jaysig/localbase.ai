@@ -1,5 +1,7 @@
 # LocalBase
 
+> **🚧 Work in Progress** - This project is under active development. APIs and features may change. Contributions welcome!
+
 **Local-first analytics workspace for your business**
 
 Query your business data with AI. Your data stays on your machine - no cloud dashboards, no SaaS subscriptions.
@@ -75,7 +77,7 @@ It will ask you some questions - just follow the prompts. It opens your browser 
 
 Now you can grab the code:
 ```
-gh repo clone rriggin/localbase.ai
+gh repo clone localbase-ai/localbase.ai
 cd localbase.ai
 npm install
 ```
