@@ -9,7 +9,7 @@ Target experience: `curl -fsSL https://localbase.ai/install | bash`
 
 Installing opencode version: 1.1.25
 ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ 100%
-Successfully added opencode to $PATH in /Users/ryanriggin/.zshrc
+Successfully added opencode to $PATH in /Users/your-username/.zshrc
 
                                  ▄
 █▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█

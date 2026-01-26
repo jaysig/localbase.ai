@@ -125,6 +125,9 @@ connectors/**/*_credentials.json
 # Instance-specific projects (analysis, etc.)
 /projects/
 
+# Project templates (instance-specific examples)
+/templates/projects/
+
 # Keep viz projects (presentation views)
 !viz/projects/
 app/.vite/

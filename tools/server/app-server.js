@@ -1245,12 +1245,11 @@ app.post('/api/connectors/install', (req, res) => {
       });
     }
 
-    // Connector template sources (in order of preference)
-    const templateSources = [
-      join(homedir(), 'Work', 'goskills', 'connectors', connectorId),
-      join(homedir(), 'Work', 'partnernomics-localbase', 'connectors', connectorId),
-      join(homedir(), 'Work', 'renu', 'connectors', connectorId)
-    ];
+    // Connector template sources - check other LocalBase instances for connector templates
+    // This allows copying connectors between instances without manual file management
+    const templateSources = detectWorkspaces()
+      .filter(ws => ws.path !== currentWorkspace)
+      .map(ws => join(ws.path, 'connectors', connectorId));
 
     // Find the template
     let templatePath = null;
