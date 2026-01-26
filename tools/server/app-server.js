@@ -605,6 +605,87 @@ app.post('/api/workspace/create', (req, res) => {
 });
 
 /**
+ * DELETE /api/workspace
+ * Delete a workspace (removes the entire directory)
+ */
+app.delete('/api/workspace', (req, res) => {
+  try {
+    const { path: workspacePath } = req.body;
+
+    if (!workspacePath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Workspace path is required'
+      });
+    }
+
+    // Sanitize path
+    let safePath;
+    try {
+      safePath = sanitizePath(workspacePath);
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid workspace path: ' + e.message
+      });
+    }
+
+    // Safety checks
+    // 1. Must be in ~/Work directory
+    const home = homedir();
+    const workDir = join(home, 'Work');
+    if (!safePath.startsWith(workDir)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Can only delete workspaces in ~/Work directory'
+      });
+    }
+
+    // 2. Cannot delete the framework repo itself
+    if (safePath.endsWith('/localbase.ai') || safePath.endsWith('/localbase.ai/')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Cannot delete the LocalBase framework'
+      });
+    }
+
+    // 3. Must be a valid LocalBase workspace (has viz/visualizations.json)
+    const vizPath = join(safePath, 'viz', 'visualizations.json');
+    if (!existsSync(vizPath)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Not a valid LocalBase workspace'
+      });
+    }
+
+    // 4. Cannot delete current workspace
+    if (safePath === currentWorkspace) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete the currently active workspace. Switch to a different workspace first.'
+      });
+    }
+
+    // Delete the workspace directory
+    const { rmSync } = require('fs');
+    rmSync(safePath, { recursive: true, force: true });
+
+    console.log(`🗑️ Deleted workspace: ${safePath}`);
+
+    res.json({
+      success: true,
+      message: `Workspace deleted: ${safePath.split('/').pop()}`
+    });
+  } catch (error) {
+    console.error('Error deleting workspace:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/workspace
  * Get current workspace information
  */

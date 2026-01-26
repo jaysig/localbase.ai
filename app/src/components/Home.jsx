@@ -1,4 +1,4 @@
-import { Bot, Database, Check, CornerDownLeft, Plus, FolderPlus } from 'lucide-react'
+import { Bot, Database, Check, CornerDownLeft, Plus, FolderPlus, Trash2 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +16,7 @@ export default function Home({ onWorkspaceSelected }) {
   const [forceSingleWorkspace, setForceSingleWorkspace] = useState(() => {
     return localStorage.getItem('localbase-force-single-workspace') === 'true'
   })
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // workspace path to confirm delete
 
   // Listen for single workspace mode changes
   useEffect(() => {
@@ -160,6 +161,25 @@ export default function Home({ onWorkspaceSelected }) {
       alert(`Failed to create workspace: ${err.message}`)
     } finally {
       setCreating(false)
+    }
+  }
+
+  const handleDeleteWorkspace = async (workspacePath) => {
+    if (!window.electronAPI?.workspace) return
+
+    try {
+      const result = await window.electronAPI.workspace.delete(workspacePath)
+
+      if (result.success) {
+        setDeleteConfirm(null)
+        // Refresh workspace list
+        scanForProjects()
+      } else {
+        alert(`Failed to delete workspace: ${result.error}`)
+      }
+    } catch (err) {
+      console.error('Failed to delete workspace:', err)
+      alert(`Failed to delete workspace: ${err.message}`)
     }
   }
 
@@ -312,8 +332,11 @@ export default function Home({ onWorkspaceSelected }) {
                       key={project.path}
                       role="button"
                       tabIndex={0}
-                      className="cursor-pointer transition-all hover:scale-[1.02] border-border hover:border-green-400/50"
-                      onClick={async () => {
+                      className="cursor-pointer transition-all hover:scale-[1.02] border-border hover:border-green-400/50 group relative"
+                      onClick={async (e) => {
+                        // Don't open workspace if clicking delete button
+                        if (e.target.closest('[data-delete-btn]')) return
+                        if (deleteConfirm === project.path) return
                         // Auto-open workspace on click
                         if (!window.electronAPI?.config) return
                         try {
@@ -331,14 +354,61 @@ export default function Home({ onWorkspaceSelected }) {
                       <CardHeader className="p-3">
                         <CardTitle className="flex items-start gap-2 text-sm text-left">
                           <Database className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                          <div className="min-w-0 text-left">
+                          <div className="min-w-0 text-left flex-1">
                             <span className="font-mono block">{project.name}</span>
                             <span className="text-xs text-muted-foreground font-mono truncate block">
                               {project.path}
                             </span>
                           </div>
+                          {/* Delete button - only show if not the framework */}
+                          {!project.path.endsWith('/localbase.ai') && (
+                            <button
+                              data-delete-btn
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteConfirm(project.path)
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-500/20 rounded text-muted-foreground hover:text-red-400"
+                              title="Delete workspace"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </CardTitle>
                       </CardHeader>
+                      {/* Delete confirmation */}
+                      {deleteConfirm === project.path && (
+                        <div className="absolute inset-0 bg-card/95 backdrop-blur-sm flex items-center justify-center rounded-lg border border-red-500/50">
+                          <div className="text-center space-y-2 p-3">
+                            <p className="text-xs text-red-400 font-medium">Delete this workspace?</p>
+                            <p className="text-xs text-muted-foreground">This cannot be undone</p>
+                            <div className="flex gap-2 justify-center">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteWorkspace(project.path)
+                                }}
+                                className="h-7 text-xs px-3"
+                              >
+                                Delete
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeleteConfirm(null)
+                                }}
+                                className="h-7 text-xs px-3"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </Card>
                   ))}
                 </div>

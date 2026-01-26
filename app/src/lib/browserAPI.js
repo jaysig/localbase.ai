@@ -105,6 +105,14 @@ export const browserAPI = {
         body: JSON.stringify({ workspaceName, parentDir })
       });
       return res.json();
+    },
+    async delete(workspacePath) {
+      const res = await fetch(`${API_BASE}/api/workspace`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: workspacePath })
+      });
+      return res.json();
     }
   },
 
