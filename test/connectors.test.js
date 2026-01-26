@@ -130,6 +130,42 @@ describe('Environment Variable Saving', () => {
 });
 
 // ============================================================================
+// Specific Connector Tests
+// ============================================================================
+
+describe('HubSpot Connector', () => {
+
+  it('should include hubspot in connector list', async () => {
+    const res = await request('/api/connectors');
+    assert.strictEqual(res.status, 200);
+    const hubspot = res.data.connectors.find(c => c.id === 'hubspot');
+    assert(hubspot, 'hubspot connector should be listed');
+    assert('status' in hubspot, 'hubspot should have status');
+  });
+
+});
+
+describe('QuickBooks Connector', () => {
+
+  it('should include quickbooks in connector list', async () => {
+    const res = await request('/api/connectors');
+    assert.strictEqual(res.status, 200);
+    const quickbooks = res.data.connectors.find(c => c.id === 'quickbooks');
+    assert(quickbooks, 'quickbooks connector should be listed');
+    assert('status' in quickbooks, 'quickbooks should have status');
+  });
+
+  it('should have quickbooks connector files', async () => {
+    const res = await request('/api/connectors');
+    assert.strictEqual(res.status, 200);
+    const quickbooks = res.data.connectors.find(c => c.id === 'quickbooks');
+    assert(quickbooks, 'quickbooks connector should exist');
+    assert(quickbooks.path, 'quickbooks should have a path');
+  });
+
+});
+
+// ============================================================================
 // Data Sources
 // ============================================================================
 
