@@ -4,6 +4,7 @@
   "description": "LocalBase landing page",
   "main": "server.js",
   "scripts": {
+    "build": "echo 'No build needed'",
     "start": "node server.js"
   },
   "engines": {
