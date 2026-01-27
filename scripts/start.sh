@@ -87,5 +87,13 @@ echo ""
 # Open browser after a short delay
 (sleep 2 && open http://localhost:5173 2>/dev/null || xdg-open http://localhost:5173 2>/dev/null || true) &
 
+# Load environment variables from env.local if it exists
+if [ -f "env.local" ]; then
+    echo "📋 Loading env.local..."
+    set -a
+    source env.local
+    set +a
+fi
+
 # Start dev server (this blocks)
 npm run dev
