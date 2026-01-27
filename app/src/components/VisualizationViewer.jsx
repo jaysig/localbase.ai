@@ -27,8 +27,14 @@ export default function VisualizationViewer() {
   const [initialRestoreAttempted, setInitialRestoreAttempted] = useState(false)
   const searchInputRef = useRef(null)
 
-  // Get viz ID from URL on initial load
+  // Get viz ID from URL on initial load (supports both /viz/:id path and ?viz=id query param)
   const getVizIdFromUrl = () => {
+    // Check path-based routing first (/viz/:id)
+    const pathMatch = window.location.pathname.match(/^\/viz\/([^/]+)/)
+    if (pathMatch) {
+      return pathMatch[1]
+    }
+    // Fallback to query param for backwards compat
     const search = window.__INITIAL_SEARCH__ || window.location.search
     const params = new URLSearchParams(search)
     return params.get('viz')

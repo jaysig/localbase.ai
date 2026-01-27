@@ -1,30 +1,5 @@
 {
-  "visualizations": [
-    {
-      "id": "sample-chart-1",
-      "title": "Monthly Revenue",
-      "question": "What does our monthly revenue look like?",
-      "file": "sample-chart-1.html",
-      "project": "sample-project",
-      "tags": ["sample", "revenue"]
-    },
-    {
-      "id": "sample-chart-2",
-      "title": "User Growth",
-      "question": "How is our user base growing?",
-      "file": "sample-chart-2.html",
-      "project": "sample-project",
-      "tags": ["sample", "users"]
-    },
-    {
-      "id": "sample-chart-3",
-      "title": "Traffic Sources",
-      "question": "Where is our traffic coming from?",
-      "file": "sample-chart-3.html",
-      "project": "sample-project",
-      "tags": ["sample", "traffic"]
-    }
-  ],
-  "lastUpdated": "2026-01-20T03:15:00.000Z",
-  "totalVisualizations": 3
+  "visualizations": [],
+  "lastUpdated": null,
+  "totalVisualizations": 0
 }
