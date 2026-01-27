@@ -67,7 +67,9 @@ coverage/
 *.lcov
 .nyc_output
 
-# Generated visualizations (optional - commit if you want examples)
+# Generated visualizations (instance-specific)
+viz/visualizations.json
+viz/*.html
 # app/viz/*.html
 
 # Connector-specific cache
