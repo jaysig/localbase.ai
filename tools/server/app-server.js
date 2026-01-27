@@ -5,40 +5,15 @@
  * Serves static files + handles visualization management API
  */
 
-import { readFileSync, existsSync, unlinkSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'fs';
-import { join, dirname, basename, normalize } from 'path';
-
-// Load env.local if it exists (before other imports that might use env vars)
-const envLocalPath = join(process.cwd(), 'env.local');
-if (existsSync(envLocalPath)) {
-  try {
-    const envContent = readFileSync(envLocalPath, 'utf-8');
-    envContent.split('\n').forEach(line => {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('#')) {
-        const [key, ...valueParts] = trimmed.split('=');
-        if (key && valueParts.length > 0) {
-          const value = valueParts.join('=').trim();
-          // Only set if not already set (command line takes precedence)
-          if (!process.env[key.trim()]) {
-            process.env[key.trim()] = value;
-          }
-        }
-      }
-    });
-    console.log('📋 Loaded env.local');
-  } catch (err) {
-    console.warn('⚠️  Failed to load env.local:', err.message);
-  }
-}
-
 import express from 'express';
+import { join, dirname, basename, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 
 // Enable require() for CommonJS modules
 const require = createRequire(import.meta.url);
 import { VizRegistry } from '../viz/registry.js';
+import { unlinkSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 import cors from 'cors';
 import { spawnSync } from 'child_process';
@@ -280,104 +255,6 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
-
-// ============================================================================
-// Authentication (optional - enabled when LOCALBASE_USER and LOCALBASE_PASS are set)
-// ============================================================================
-
-const AUTH_USER = process.env.LOCALBASE_USER;
-const AUTH_PASS = process.env.LOCALBASE_PASS;
-const AUTH_ENABLED = AUTH_USER && AUTH_PASS;
-
-// Simple session store (in-memory, cleared on restart)
-const sessions = new Map();
-const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-
-function generateSessionToken() {
-  return Array.from({ length: 32 }, () =>
-    Math.random().toString(36).charAt(2)
-  ).join('');
-}
-
-function isValidSession(token) {
-  if (!token) return false;
-  const session = sessions.get(token);
-  if (!session) return false;
-  if (Date.now() > session.expiresAt) {
-    sessions.delete(token);
-    return false;
-  }
-  return true;
-}
-
-// Auth status endpoint (always accessible)
-app.get('/api/auth/status', (req, res) => {
-  if (!AUTH_ENABLED) {
-    return res.json({ authEnabled: false, authenticated: true });
-  }
-
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  const authenticated = isValidSession(token);
-
-  res.json({ authEnabled: true, authenticated });
-});
-
-// Login endpoint (always accessible)
-app.post('/api/auth/login', (req, res) => {
-  if (!AUTH_ENABLED) {
-    return res.json({ success: true, message: 'Auth not enabled' });
-  }
-
-  const { username, password } = req.body;
-
-  if (username === AUTH_USER && password === AUTH_PASS) {
-    const token = generateSessionToken();
-    sessions.set(token, {
-      username,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + SESSION_DURATION
-    });
-
-    console.log(`🔐 User logged in: ${username}`);
-    return res.json({ success: true, token });
-  }
-
-  console.warn(`⚠️  Failed login attempt for: ${username}`);
-  return res.status(401).json({ success: false, error: 'Invalid credentials' });
-});
-
-// Logout endpoint
-app.post('/api/auth/logout', (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (token) {
-    sessions.delete(token);
-  }
-  res.json({ success: true });
-});
-
-// Auth middleware - protect all other /api routes
-app.use('/api', (req, res, next) => {
-  // Skip auth check if auth is not enabled
-  if (!AUTH_ENABLED) {
-    return next();
-  }
-
-  // Skip auth for auth endpoints (already handled above)
-  if (req.path.startsWith('/auth/')) {
-    return next();
-  }
-
-  const token = req.headers.authorization?.replace('Bearer ', '');
-
-  if (!isValidSession(token)) {
-    return res.status(401).json({
-      error: 'Authentication required',
-      authEnabled: true
-    });
-  }
-
-  next();
-});
 
 // Block access to sensitive files and path traversal
 const SENSITIVE_FILES = ['env.local', '.env', 'credentials.json', '.git', '.gitignore'];

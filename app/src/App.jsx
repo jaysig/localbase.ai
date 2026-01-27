@@ -1,7 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { initBrowserAPI, getAuthToken } from '@/lib/browserAPI'
+import { initBrowserAPI } from '@/lib/browserAPI'
 import { parseUrl, buildUrl } from '@/lib/router'
-import Login from '@/components/Login'
 
 // Initialize browser API shim if not in Electron
 initBrowserAPI()
@@ -57,45 +56,6 @@ const getIconComponent = (iconName) => {
 function App() {
   // Enable Vimium-style keyboard shortcuts
   useVimiumShortcuts()
-
-  // Auth state
-  const [authChecking, setAuthChecking] = useState(true)
-  const [authRequired, setAuthRequired] = useState(false)
-  const [authenticated, setAuthenticated] = useState(false)
-
-  // Check auth status on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const token = localStorage.getItem('localbase-auth-token')
-        const response = await fetch('/api/auth/status', {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        })
-        const data = await response.json()
-
-        if (!data.authEnabled) {
-          // Auth not configured, allow access
-          setAuthRequired(false)
-          setAuthenticated(true)
-        } else if (data.authenticated) {
-          // Valid session
-          setAuthRequired(true)
-          setAuthenticated(true)
-        } else {
-          // Auth required but not authenticated
-          setAuthRequired(true)
-          setAuthenticated(false)
-        }
-      } catch (err) {
-        console.error('Auth check failed:', err)
-        // On error, assume no auth required
-        setAuthenticated(true)
-      } finally {
-        setAuthChecking(false)
-      }
-    }
-    checkAuth()
-  }, [])
 
   const [currentWorkspace, setCurrentWorkspace] = useState('')
 
@@ -436,23 +396,6 @@ function App() {
   ]
 
   const navItems = [...coreNavItems, ...toolNavItems, ...settingsNavItems]
-
-  // Show loading state while checking auth
-  if (authChecking) {
-    return (
-      <div className="flex h-screen bg-background text-foreground dark items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
-          <p className="text-sm text-muted-foreground font-mono">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show login if auth required and not authenticated
-  if (authRequired && !authenticated) {
-    return <Login onLogin={() => setAuthenticated(true)} />
-  }
 
   return (
     <div className="flex h-screen bg-background text-foreground dark flex-col">

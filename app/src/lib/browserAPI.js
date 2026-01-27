@@ -5,53 +5,15 @@
 
 const API_BASE = 'http://localhost:3000';
 
-/**
- * Get auth token from localStorage
- */
-export function getAuthToken() {
-  return localStorage.getItem('localbase-auth-token');
-}
-
-/**
- * Make authenticated fetch request
- */
-async function authFetch(url, options = {}) {
-  const token = getAuthToken();
-  const headers = {
-    ...options.headers,
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  if (options.body && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const response = await fetch(url, { ...options, headers });
-
-  // If we get 401, clear token and reload to show login
-  if (response.status === 401) {
-    const data = await response.json();
-    if (data.authEnabled) {
-      localStorage.removeItem('localbase-auth-token');
-      window.location.reload();
-    }
-  }
-
-  return response;
-}
-
 export const browserAPI = {
   config: {
     async getProjectRoot() {
-      const res = await authFetch(`${API_BASE}/api/workspace`);
+      const res = await fetch(`${API_BASE}/api/workspace`);
       const data = await res.json();
       return data.success ? data.path : null;
     },
     async setProjectRoot(path) {
-      const res = await authFetch(`${API_BASE}/api/workspace/switch`, {
+      const res = await fetch(`${API_BASE}/api/workspace/switch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path })
@@ -67,46 +29,46 @@ export const browserAPI = {
 
   api: {
     async getVisualizations() {
-      const res = await authFetch(`${API_BASE}/api/viz`);
+      const res = await fetch(`${API_BASE}/api/viz`);
       const data = await res.json();
       return data.success ? { success: true, visualizations: data.visualizations, projectsWithPresentation: data.projectsWithPresentation || [] } : data;
     },
     async deleteVisualization(id) {
-      const res = await authFetch(`${API_BASE}/api/viz/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/api/viz/${id}`, { method: 'DELETE' });
       return res.json();
     },
     async getTools() {
-      const res = await authFetch(`${API_BASE}/api/tools`);
+      const res = await fetch(`${API_BASE}/api/tools`);
       const data = await res.json();
       return data.success ? data : { success: true, tools: [] };
     },
     async getConnectors() {
-      const res = await authFetch(`${API_BASE}/api/connectors`);
+      const res = await fetch(`${API_BASE}/api/connectors`);
       const data = await res.json();
       return data.success ? data : { success: true, connectors: [] };
     },
     async getDataSources() {
-      const res = await authFetch(`${API_BASE}/api/datasources`);
+      const res = await fetch(`${API_BASE}/api/datasources`);
       const data = await res.json();
       return data.success ? data : { success: true, dataSources: [] };
     },
     async getToolConfig(toolId) {
-      const res = await authFetch(`${API_BASE}/api/tools/${toolId}/config`);
+      const res = await fetch(`${API_BASE}/api/tools/${toolId}/config`);
       return res.json();
     },
     async readWorkspaceFile(relativePath) {
-      const res = await authFetch(`${API_BASE}/api/workspace/file?path=${encodeURIComponent(relativePath)}`);
+      const res = await fetch(`${API_BASE}/api/workspace/file?path=${encodeURIComponent(relativePath)}`);
       return res.json();
     },
     async syncDataSource(sourceId) {
-      const res = await authFetch(`${API_BASE}/api/datasources/${sourceId}/sync`, {
+      const res = await fetch(`${API_BASE}/api/datasources/${sourceId}/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
       return res.json();
     },
     async toggleVizPin(id, pinned) {
-      const res = await authFetch(`${API_BASE}/api/viz/${id}/pin`, {
+      const res = await fetch(`${API_BASE}/api/viz/${id}/pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pinned })
@@ -129,7 +91,7 @@ export const browserAPI = {
   // Workspaces API - browser mode uses this instead of filesystem scanning
   workspaces: {
     async list() {
-      const res = await authFetch(`${API_BASE}/api/workspaces`);
+      const res = await fetch(`${API_BASE}/api/workspaces`);
       return res.json();
     }
   },
@@ -137,7 +99,7 @@ export const browserAPI = {
   // Workspace management
   workspace: {
     async create({ workspaceName, parentDir }) {
-      const res = await authFetch(`${API_BASE}/api/workspace/create`, {
+      const res = await fetch(`${API_BASE}/api/workspace/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workspaceName, parentDir })
@@ -145,7 +107,7 @@ export const browserAPI = {
       return res.json();
     },
     async delete(workspacePath) {
-      const res = await authFetch(`${API_BASE}/api/workspace`, {
+      const res = await fetch(`${API_BASE}/api/workspace`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: workspacePath })
@@ -160,7 +122,7 @@ export const browserAPI = {
   // DB queries go through server - matches Electron's hardcoded localbase.db
   db: {
     async query(sql, params = []) {
-      const res = await authFetch(`${API_BASE}/api/db/query`, {
+      const res = await fetch(`${API_BASE}/api/db/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -181,7 +143,7 @@ export const browserAPI = {
   // MediaTrader specific API - queryDataSource using config-driven system
   mediatrader: {
     async queryDataSource(params) {
-      const res = await authFetch(`${API_BASE}/api/mediatrader/query`, {
+      const res = await fetch(`${API_BASE}/api/mediatrader/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
