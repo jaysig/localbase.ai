@@ -16,7 +16,7 @@ import { VizRegistry } from '../viz/registry.js';
 import { unlinkSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 import cors from 'cors';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import {
   detectWorkspaces,
   getCurrentWorkspace,
@@ -39,6 +39,75 @@ import {
 } from './conversation-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
+
+/**
+ * Calculate directory size recursively using native Node (no shell commands)
+ * @param {string} dirPath - Directory to measure
+ * @returns {number} Size in bytes
+ */
+function getDirectorySize(dirPath) {
+  let totalSize = 0;
+  try {
+    const items = readdirSync(dirPath);
+    for (const item of items) {
+      const fullPath = join(dirPath, item);
+      try {
+        const stat = statSync(fullPath);
+        if (stat.isFile()) {
+          totalSize += stat.size;
+        } else if (stat.isDirectory()) {
+          totalSize += getDirectorySize(fullPath);
+        }
+      } catch (e) {
+        // Skip files we can't access
+      }
+    }
+  } catch (e) {
+    // Directory doesn't exist or can't be read
+  }
+  return totalSize;
+}
+
+/**
+ * Count files matching a pattern recursively using native Node
+ * @param {string} dirPath - Directory to search
+ * @param {string} extension - File extension to match (e.g., '.db')
+ * @returns {number} Count of matching files
+ */
+function countFiles(dirPath, extension) {
+  let count = 0;
+  try {
+    const items = readdirSync(dirPath);
+    for (const item of items) {
+      const fullPath = join(dirPath, item);
+      try {
+        const stat = statSync(fullPath);
+        if (stat.isFile() && item.endsWith(extension)) {
+          count++;
+        } else if (stat.isDirectory()) {
+          count += countFiles(fullPath, extension);
+        }
+      } catch (e) {
+        // Skip files we can't access
+      }
+    }
+  } catch (e) {
+    // Directory doesn't exist or can't be read
+  }
+  return count;
+}
+
+/**
+ * Format bytes to human readable string
+ * @param {number} bytes - Size in bytes
+ * @returns {string} Formatted size (e.g., '1.5M', '200K')
+ */
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + 'K';
+  if (bytes < 1024 * 1024 * 1024) return Math.round(bytes / (1024 * 1024)) + 'M';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + 'G';
+}
 
 /**
  * Sanitize a path for safe use in shell commands.
@@ -107,6 +176,66 @@ app.use((req, res, next) => {
   res.header('X-Frame-Options', 'SAMEORIGIN');
   res.header('X-Content-Type-Options', 'nosniff');
   res.header('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// Localhost-only enforcement (can be disabled with LOCALBASE_ALLOW_REMOTE=true)
+const ALLOW_REMOTE = process.env.LOCALBASE_ALLOW_REMOTE === 'true';
+const LOCALHOST_IPS = ['127.0.0.1', '::1', '::ffff:127.0.0.1', 'localhost'];
+
+app.use((req, res, next) => {
+  if (ALLOW_REMOTE) {
+    return next();
+  }
+
+  const clientIP = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress;
+
+  // Check if request is from localhost
+  const isLocalhost = LOCALHOST_IPS.some(ip => clientIP?.includes(ip));
+
+  if (!isLocalhost) {
+    console.warn(`⚠️  Blocked non-local request from ${clientIP}`);
+    return res.status(403).json({
+      error: 'LocalBase is configured for local access only',
+      hint: 'Set LOCALBASE_ALLOW_REMOTE=true to allow remote access (not recommended)'
+    });
+  }
+
+  next();
+});
+
+// Rate limiting - prevent abuse
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 200; // requests per window
+
+app.use((req, res, next) => {
+  const clientIP = req.ip || req.connection?.remoteAddress || '0.0.0.0';
+  const now = Date.now();
+
+  // Clean old entries
+  for (const [ip, data] of rateLimitMap.entries()) {
+    if (now - data.windowStart > RATE_LIMIT_WINDOW) {
+      rateLimitMap.delete(ip);
+    }
+  }
+
+  // Check rate limit
+  let clientData = rateLimitMap.get(clientIP);
+  if (!clientData || now - clientData.windowStart > RATE_LIMIT_WINDOW) {
+    clientData = { windowStart: now, count: 0 };
+    rateLimitMap.set(clientIP, clientData);
+  }
+
+  clientData.count++;
+
+  if (clientData.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({
+      error: 'Too many requests',
+      retryAfter: Math.ceil((clientData.windowStart + RATE_LIMIT_WINDOW - now) / 1000)
+    });
+  }
+
   next();
 });
 
@@ -721,6 +850,7 @@ app.get('/api/workspace', (req, res) => {
 /**
  * GET /api/workspace/stats
  * Returns detailed workspace statistics including file counts, sizes, etc.
+ * Uses native Node.js for all file operations (no shell commands for security)
  */
 app.get('/api/workspace/stats', (req, res) => {
   try {
@@ -730,61 +860,82 @@ app.get('/api/workspace/stats', (req, res) => {
       path: currentWorkspace
     };
 
-    // Get git repo size
+    // Get git repo size (native Node)
     try {
       const gitDir = join(currentWorkspace, '.git');
       if (existsSync(gitDir)) {
-        const gitSize = execSync(`du -sh "${gitDir}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-        stats.gitRepoSize = gitSize;
+        const gitSizeBytes = getDirectorySize(gitDir);
+        stats.gitRepoSize = formatSize(gitSizeBytes);
       }
     } catch (e) {
       stats.gitRepoSize = 'N/A';
     }
 
-    // Get tracked files count
+    // Get tracked files count (using git command safely via spawnSync)
     try {
-      const trackedFiles = execSync(`cd "${currentWorkspace}" && git ls-files 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
-      stats.trackedFiles = parseInt(trackedFiles) || 0;
+      const result = spawnSync('git', ['ls-files'], {
+        cwd: currentWorkspace,
+        encoding: 'utf8'
+      });
+      if (result.status === 0) {
+        const files = result.stdout.trim().split('\n').filter(f => f);
+        stats.trackedFiles = files.length;
+      } else {
+        stats.trackedFiles = 0;
+      }
     } catch (e) {
       stats.trackedFiles = 0;
     }
 
-    // Get code + assets size (excluding node_modules and .git)
+    // Get code + assets size (excluding node_modules and .git) - native Node
     try {
-      // macOS du doesn't support --exclude, so we calculate manually
-      const totalSize = execSync(`du -sk "${currentWorkspace}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-      const gitSize = execSync(`du -sk "${currentWorkspace}/.git" 2>/dev/null | cut -f1 || echo 0`, { encoding: 'utf8' }).trim();
-      const nodeSize = execSync(`du -sk "${currentWorkspace}/node_modules" "${currentWorkspace}/electron-app/node_modules" 2>/dev/null | awk '{sum+=$1} END {print sum}' || echo 0`, { encoding: 'utf8' }).trim();
+      const excludeDirs = ['node_modules', '.git', 'app/node_modules'];
+      let codeSize = 0;
 
-      const codeSizeKB = parseInt(totalSize) - parseInt(gitSize || 0) - parseInt(nodeSize || 0);
+      const calcSize = (dir, depth = 0) => {
+        if (depth > 10) return; // Prevent infinite recursion
+        try {
+          const items = readdirSync(dir);
+          for (const item of items) {
+            if (excludeDirs.includes(item)) continue;
+            const fullPath = join(dir, item);
+            try {
+              const stat = statSync(fullPath);
+              if (stat.isFile()) {
+                codeSize += stat.size;
+              } else if (stat.isDirectory()) {
+                calcSize(fullPath, depth + 1);
+              }
+            } catch (e) {}
+          }
+        } catch (e) {}
+      };
 
-      if (codeSizeKB < 1024) {
-        stats.codeSize = codeSizeKB + 'K';
-      } else if (codeSizeKB < 1024 * 1024) {
-        stats.codeSize = Math.round(codeSizeKB / 1024) + 'M';
-      } else {
-        stats.codeSize = (codeSizeKB / 1024 / 1024).toFixed(1) + 'G';
-      }
+      calcSize(currentWorkspace);
+      stats.codeSize = formatSize(codeSize);
     } catch (e) {
       stats.codeSize = 'N/A';
     }
 
-    // Get node_modules size
+    // Get node_modules size (native Node)
     try {
       const nodeModulesDir = join(currentWorkspace, 'node_modules');
-      const electronNodeModulesDir = join(currentWorkspace, 'electron-app/node_modules');
-      let nodeSize = '0B';
+      const appNodeModulesDir = join(currentWorkspace, 'app/node_modules');
+      let totalSize = 0;
 
-      if (existsSync(nodeModulesDir) || existsSync(electronNodeModulesDir)) {
-        const dirs = [nodeModulesDir, electronNodeModulesDir].filter(d => existsSync(d));
-        nodeSize = execSync(`du -sh ${dirs.map(d => `"${d}"`).join(' ')} 2>/dev/null | awk '{sum+=$1} END {print sum "M"}'`, { encoding: 'utf8' }).trim();
+      if (existsSync(nodeModulesDir)) {
+        totalSize += getDirectorySize(nodeModulesDir);
       }
-      stats.nodeModulesSize = nodeSize;
+      if (existsSync(appNodeModulesDir)) {
+        totalSize += getDirectorySize(appNodeModulesDir);
+      }
+
+      stats.nodeModulesSize = formatSize(totalSize);
     } catch (e) {
       stats.nodeModulesSize = 'N/A';
     }
 
-    // Get visualizations count
+    // Get visualizations count (already native Node)
     try {
       const vizRegistryPath = join(vizDir, 'visualizations.json');
       if (existsSync(vizRegistryPath)) {
@@ -797,7 +948,7 @@ app.get('/api/workspace/stats', (req, res) => {
       stats.visualizationCount = 0;
     }
 
-    // Get connectors count
+    // Get connectors count (already native Node)
     try {
       const connectorsDir = join(currentWorkspace, 'connectors');
       if (existsSync(connectorsDir)) {
@@ -813,14 +964,12 @@ app.get('/api/workspace/stats', (req, res) => {
       stats.connectorCount = 0;
     }
 
-    // Get database files count and size
+    // Get database files count and size (native Node)
     try {
       const dataDir = join(currentWorkspace, 'data');
       if (existsSync(dataDir)) {
-        const dbCount = execSync(`find "${dataDir}" -name "*.db" 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
-        const dbSize = execSync(`du -sh "${dataDir}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-        stats.databaseCount = parseInt(dbCount) || 0;
-        stats.databaseSize = dbSize;
+        stats.databaseCount = countFiles(dataDir, '.db');
+        stats.databaseSize = formatSize(getDirectorySize(dataDir));
       } else {
         stats.databaseCount = 0;
         stats.databaseSize = '0B';
@@ -864,15 +1013,29 @@ app.get('/api/workspace/framework-stats', (req, res) => {
     let instanceSize = 0;
     let lastModified = null;
 
+    // Count files recursively (native Node)
+    const countFilesRecursive = (dir) => {
+      let count = 0;
+      try {
+        const items = readdirSync(dir);
+        for (const item of items) {
+          const fullPath = join(dir, item);
+          try {
+            const stat = statSync(fullPath);
+            if (stat.isFile()) count++;
+            else if (stat.isDirectory()) count += countFilesRecursive(fullPath);
+          } catch (e) {}
+        }
+      } catch (e) {}
+      return count;
+    };
+
     frameworkDirs.forEach(dir => {
       const dirPath = join(frameworkRoot, dir);
       if (existsSync(dirPath)) {
         try {
-          const fileCount = execSync(`find "${dirPath}" -type f 2>/dev/null | wc -l`, { encoding: 'utf8' }).trim();
-          instanceFiles += parseInt(fileCount) || 0;
-
-          const dirSize = execSync(`du -sk "${dirPath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-          instanceSize += parseInt(dirSize) || 0;
+          instanceFiles += countFilesRecursive(dirPath);
+          instanceSize += getDirectorySize(dirPath);
 
           const modTime = statSync(dirPath).mtime;
           if (!lastModified || modTime > lastModified) {
@@ -881,17 +1044,6 @@ app.get('/api/workspace/framework-stats', (req, res) => {
         } catch (e) {}
       }
     });
-
-    // Format sizes
-    const formatSize = (sizeKB) => {
-      if (sizeKB < 1024) {
-        return sizeKB + 'K';
-      } else if (sizeKB < 1024 * 1024) {
-        return Math.round(sizeKB / 1024) + 'M';
-      } else {
-        return (sizeKB / 1024 / 1024).toFixed(1) + 'G';
-      }
-    };
 
     // Format last modified
     const now = new Date();
@@ -914,7 +1066,7 @@ app.get('/api/workspace/framework-stats', (req, res) => {
       success: true,
       framework: {
         files: instanceFiles,
-        size: formatSize(instanceSize),
+        size: formatSize(instanceSize),  // Uses global formatSize helper
         lastModified: lastSyncFormatted
       }
     });
@@ -930,6 +1082,7 @@ app.get('/api/workspace/framework-stats', (req, res) => {
 /**
  * GET /api/workspace/node-modules-breakdown
  * Returns detailed breakdown of entire framework repo by directory/file
+ * Uses native Node.js for all file operations (no shell commands for security)
  */
 app.get('/api/workspace/node-modules-breakdown', (req, res) => {
   try {
@@ -942,24 +1095,29 @@ app.get('/api/workspace/node-modules-breakdown', (req, res) => {
 
     const items = [];
 
-    // Get node_modules breakdown (top packages)
+    // Get node_modules breakdown (top packages) - native Node
     const nodeModulesDir = join(frameworkRoot, 'node_modules');
     if (existsSync(nodeModulesDir)) {
       const packages = readdirSync(nodeModulesDir)
         .filter(item => {
           const itemPath = join(nodeModulesDir, item);
-          return statSync(itemPath).isDirectory();
+          try {
+            return statSync(itemPath).isDirectory();
+          } catch (e) {
+            return false;
+          }
         })
         .map(packageName => {
           const packagePath = join(nodeModulesDir, packageName);
           try {
-            const sizeKB = execSync(`du -sk "${packagePath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-            const sizeMB = parseInt(sizeKB) / 1024;
+            const sizeBytes = getDirectorySize(packagePath);
+            const sizeKB = Math.round(sizeBytes / 1024);
+            const sizeMB = sizeBytes / (1024 * 1024);
 
             return {
               name: packageName,
               sizeMB: Math.round(sizeMB * 100) / 100,
-              sizeKB: parseInt(sizeKB),
+              sizeKB: sizeKB,
               category: 'node_modules'
             };
           } catch (e) {
@@ -983,18 +1141,19 @@ app.get('/api/workspace/node-modules-breakdown', (req, res) => {
       }
     }
 
-    // Get framework directories
+    // Get framework directories - native Node
     const frameworkDirs = ['tools', 'app', 'connectors', 'data', 'scripts'];
     frameworkDirs.forEach(dir => {
       const dirPath = join(frameworkRoot, dir);
       if (existsSync(dirPath)) {
         try {
-          const sizeKB = execSync(`du -sk "${dirPath}" 2>/dev/null | cut -f1`, { encoding: 'utf8' }).trim();
-          const sizeMB = parseInt(sizeKB) / 1024;
+          const sizeBytes = getDirectorySize(dirPath);
+          const sizeKB = Math.round(sizeBytes / 1024);
+          const sizeMB = sizeBytes / (1024 * 1024);
           items.push({
             name: dir,
             sizeMB: Math.round(sizeMB * 100) / 100,
-            sizeKB: parseInt(sizeKB),
+            sizeKB: sizeKB,
             category: 'framework'
           });
         } catch (e) {}

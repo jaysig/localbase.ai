@@ -2,6 +2,8 @@
 
 > **🚧 Work in Progress** - This project is under active development. APIs and features may change. Contributions welcome!
 
+> **⚠️ Security Notice:** LocalBase is designed for **local/trusted network use only**. The server has no authentication - anyone with network access can read and modify your data. **Do not expose to the public internet** without adding authentication. See [Security](#security) below.
+
 **Local-first analytics workspace for your business**
 
 Query your business data with AI. Your data stays on your machine - no cloud dashboards, no SaaS subscriptions.
