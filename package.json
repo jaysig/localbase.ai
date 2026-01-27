@@ -11,7 +11,7 @@
     "mcp": "node tools/mcp/server.js",
     "all": "npm run mcp & npm start",
     "server:watch": "node --watch tools/server/app-server.js",
-    "test": "node --test test/**/*.test.js",
+    "test": "./scripts/run-tests.sh",
     "test:watch": "node --test --watch test/**/*.test.js",
     "test:coverage": "c8 --include='tools/server/**' node --test test/**/*.test.js"
   },

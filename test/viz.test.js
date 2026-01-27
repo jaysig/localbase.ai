@@ -5,43 +5,25 @@
  * Run with: npm test
  */
 
-import { describe, it } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { startTestServer, stopTestServer, request } from './setup.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const VIZ_DIR = join(ROOT, 'viz');
 const VIZ_REGISTRY = join(VIZ_DIR, 'visualizations.json');
 
-const BASE_URL = 'http://localhost:3000';
+before(async () => {
+  await startTestServer();
+});
 
-async function request(path, options = {}) {
-  const { method = 'GET', body, headers = {} } = options;
-
-  const fetchOptions = {
-    method,
-    headers: { 'Content-Type': 'application/json', ...headers }
-  };
-
-  if (body) {
-    fetchOptions.body = JSON.stringify(body);
-  }
-
-  const response = await fetch(`${BASE_URL}${path}`, fetchOptions);
-  const text = await response.text();
-
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
-  }
-
-  return { status: response.status, data, headers: response.headers };
-}
+after(async () => {
+  await stopTestServer();
+});
 
 // ============================================================================
 // Visualization Registry
@@ -113,12 +95,12 @@ describe('Visualization File Serving', () => {
 
   it('should serve viz files from /viz/ path', async () => {
     // Try to access viz-colors.js which should exist
-    const res = await fetch(`${BASE_URL}/viz/viz-colors.js`);
+    const res = await fetch('http://localhost:3000/viz/viz-colors.js');
     assert.strictEqual(res.status, 200, 'Should serve existing viz files');
   });
 
   it('should return 404 for non-existent viz files', async () => {
-    const res = await fetch(`${BASE_URL}/viz/nonexistent-file.html`);
+    const res = await fetch('http://localhost:3000/viz/nonexistent-file.html');
     assert.strictEqual(res.status, 404);
   });
 

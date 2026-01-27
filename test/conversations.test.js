@@ -7,36 +7,11 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
+import { startTestServer, stopTestServer, request } from './setup.js';
 
-// Helper to make HTTP requests
-async function request(path, options = {}) {
-  const { method = 'GET', body, headers = {} } = options;
-  const url = `http://localhost:3000${path}`;
-
-  const fetchOptions = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers
-    }
-  };
-
-  if (body) {
-    fetchOptions.body = JSON.stringify(body);
-  }
-
-  const response = await fetch(url, fetchOptions);
-  const text = await response.text();
-
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
-  }
-
-  return { status: response.status, data };
-}
+before(async () => {
+  await startTestServer();
+});
 
 // Store conversation IDs for cleanup
 const createdConversations = [];
@@ -387,4 +362,5 @@ after(async () => {
       // Ignore cleanup errors
     }
   }
+  await stopTestServer();
 });

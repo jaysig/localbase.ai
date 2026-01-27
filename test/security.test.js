@@ -7,42 +7,20 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { spawn } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { startTestServer, stopTestServer, request } from './setup.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
-// Helper to make HTTP requests without external dependencies
-async function request(path, options = {}) {
-  const { method = 'GET', body, headers = {} } = options;
-  const url = `http://localhost:3000${path}`;
+before(async () => {
+  await startTestServer();
+});
 
-  const fetchOptions = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers
-    }
-  };
-
-  if (body) {
-    fetchOptions.body = JSON.stringify(body);
-  }
-
-  const response = await fetch(url, fetchOptions);
-  const text = await response.text();
-
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
-  }
-
-  return { status: response.status, data, headers: response.headers };
-}
+after(async () => {
+  await stopTestServer();
+});
 
 // ============================================================================
 // SQL Injection Tests

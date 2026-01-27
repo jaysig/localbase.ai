@@ -1874,20 +1874,35 @@ async function loadExtensionRoutes() {
   }
 }
 
-// Start server (async to allow extension route loading)
-(async () => {
+/**
+ * Start the server
+ * @returns {Promise<import('http').Server>} The HTTP server instance
+ */
+async function startServer() {
   await loadExtensionRoutes();
 
-  app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 LocalBase API server running on http://localhost:${PORT}`);
-  console.log(`📁 Viz served from: ${vizDir}`);
-  console.log(`📋 API endpoints:`);
-  console.log(`   GET    /api/workspaces         - List available workspaces`);
-  console.log(`   POST   /api/workspace/switch   - Switch to different workspace`);
-  console.log(`   GET    /api/workspace          - Current workspace info`);
-  console.log(`   DELETE /api/viz/:id            - Delete visualization`);
-  console.log(`   GET    /api/viz                - List all visualizations`);
-  console.log(`   GET    /health                 - Health check`);
-  console.log(`   GET    /*                      - Static files`);
+  return new Promise((resolve) => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 LocalBase API server running on http://localhost:${PORT}`);
+      console.log(`📁 Viz served from: ${vizDir}`);
+      console.log(`📋 API endpoints:`);
+      console.log(`   GET    /api/workspaces         - List available workspaces`);
+      console.log(`   POST   /api/workspace/switch   - Switch to different workspace`);
+      console.log(`   GET    /api/workspace          - Current workspace info`);
+      console.log(`   DELETE /api/viz/:id            - Delete visualization`);
+      console.log(`   GET    /api/viz                - List all visualizations`);
+      console.log(`   GET    /health                 - Health check`);
+      console.log(`   GET    /*                      - Static files`);
+      resolve(server);
+    });
   });
-})();
+}
+
+// Export for testing
+export { app, startServer, PORT };
+
+// Start server if run directly (not imported)
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
+  startServer();
+}
