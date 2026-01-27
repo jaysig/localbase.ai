@@ -4,7 +4,7 @@
 
 set -e
 
-FRAMEWORK_DIR="$(cd "$(dirname "$0")" && pwd)"
+FRAMEWORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Colors
 GREEN='\033[0;32m'
@@ -55,8 +55,11 @@ echo -e "${BLUE}📁 Creating directory structure...${NC}"
 mkdir -p connectors
 mkdir -p data
 mkdir -p projects
+mkdir -p extensions
+mkdir -p scripts
 mkdir -p .logs
-echo "✓ Created: connectors/, data/, projects/, .logs/"
+mkdir -p .claude/commands
+echo "✓ Created: connectors/, data/, projects/, extensions/, scripts/, .logs/, .claude/commands/"
 
 # 3. Copy framework code
 echo -e "${BLUE}🔧 Copying framework code...${NC}"
@@ -68,19 +71,29 @@ echo "✓ Synced: tools/"
 
 # Copy app
 rsync -av \
-  --exclude 'viz/*.html' \
-  --exclude 'assets/visualizations.json' \
+  --exclude 'node_modules' \
+  --exclude 'dist' \
   --exclude '.DS_Store' \
+  --exclude 'src/components/tools/' \
+  --exclude 'src/components/crm/' \
   "$FRAMEWORK_DIR/app/" "$INSTANCE_DIR/app/"
 echo "✓ Synced: app/"
 
-# Copy electron-app
-rsync -av --exclude 'node_modules' --exclude 'dist' --exclude '.DS_Store' \
-  "$FRAMEWORK_DIR/electron-app/" "$INSTANCE_DIR/electron-app/"
-echo "✓ Synced: electron-app/"
+# Copy scripts
+rsync -av \
+  --exclude '.DS_Store' \
+  "$FRAMEWORK_DIR/scripts/" "$INSTANCE_DIR/scripts/"
+echo "✓ Synced: scripts/"
+
+# Copy .claude/commands
+rsync -av \
+  --exclude '.DS_Store' \
+  "$FRAMEWORK_DIR/.claude/commands/" "$INSTANCE_DIR/.claude/commands/"
+echo "✓ Synced: .claude/commands/"
 
 # 4. Create visualizations.json
 echo -e "${BLUE}📊 Initializing visualizations registry...${NC}"
+mkdir -p app/assets
 cat > app/assets/visualizations.json <<EOF
 {
   "visualizations": [],
@@ -102,65 +115,9 @@ if [ -f "$FRAMEWORK_DIR/package.json" ]; then
   echo "✓ Created: package.json"
 fi
 
-# 6. Copy sync script
-echo -e "${BLUE}🔄 Installing sync script...${NC}"
-cat > sync-framework.sh <<'EOF'
-#!/bin/bash
-# Sync framework code from localbase.ai to this instance
-# Run this after framework updates in main branch
-
-set -e
-
-FRAMEWORK_DIR=~/Work/localbase.ai
-INSTANCE_DIR=$(pwd)
-
-echo "🔄 Syncing framework from localbase.ai..."
-echo "   Source: $FRAMEWORK_DIR"
-echo "   Target: $INSTANCE_DIR"
-echo ""
-
-# Sync electron-app (full replacement since it's gitignored)
-echo "📱 Syncing electron-app..."
-rsync -av --delete \
-  --exclude 'node_modules' \
-  --exclude 'dist' \
-  --exclude '.DS_Store' \
-  $FRAMEWORK_DIR/electron-app/ $INSTANCE_DIR/electron-app/
-
-# Sync tools framework
-echo "🔧 Syncing tools..."
-rsync -av \
-  --exclude 'node_modules' \
-  --exclude '.DS_Store' \
-  $FRAMEWORK_DIR/tools/ $INSTANCE_DIR/tools/
-
-# Sync app framework (if exists)
-if [ -d "$FRAMEWORK_DIR/app" ]; then
-  echo "🎨 Syncing app..."
-  rsync -av \
-    --exclude 'viz/*.html' \
-    --exclude 'assets/visualizations.json' \
-    --exclude '.DS_Store' \
-    $FRAMEWORK_DIR/app/ $INSTANCE_DIR/app/
-fi
-
-echo ""
-echo "✅ Framework sync complete!"
-echo ""
-echo "📋 Next steps:"
-echo "   1. Test the app: cd electron-app && npm run electron:dev"
-echo "   2. Review changes: git status"
-echo "   3. Commit instance-specific fixes if needed"
-EOF
-chmod +x sync-framework.sh
-echo "✓ Created: sync-framework.sh"
-
-# 7. Copy start script
-if [ -f "$FRAMEWORK_DIR/start.sh" ]; then
-  cp "$FRAMEWORK_DIR/start.sh" "$INSTANCE_DIR/start.sh"
-  chmod +x start.sh
-  echo "✓ Created: start.sh"
-fi
+# 6. Note about sync script
+echo -e "${BLUE}🔄 Sync script ready...${NC}"
+echo "✓ scripts/sync-framework.sh copied from framework"
 
 # 8. Create env.local template
 echo -e "${BLUE}🔐 Creating env.local template...${NC}"
@@ -197,9 +154,7 @@ data/*.sqlite3
 *.log
 
 # Build outputs
-electron-app/dist/
-electron-app/node_modules/
-electron-app/build-resources/
+app/dist/
 
 # OS
 .DS_Store
@@ -247,31 +202,26 @@ This is a LocalBase instance workspace for: **$INSTANCE_NAME**
 ## Key Directories
 - \`connectors/\` - Data source connectors specific to this instance
 - \`data/\` - Local SQLite databases
-- \`tools/\`, \`app/\`, \`electron-app/\` - Framework code (synced from localbase.ai)
+- \`tools/\`, \`app/\` - Framework code (synced from localbase.ai)
 - \`env.local\` - API credentials and environment variables
 
 ## Workflow
 1. Add connectors in \`connectors/\` directory
 2. Store data in \`data/\` SQLite databases
-3. Create visualizations in \`app/viz/\`
-4. Pull framework updates: \`./sync-framework.sh\`
+3. Create visualizations in \`viz/\`
+4. Pull framework updates: \`./scripts/sync-framework.sh\`
 
 ## Important
 - Never commit \`env.local\` or \`data/\` to git
 - Framework files are synced, not edited directly
 - Instance-specific code stays in this repo
-- All visualizations auto-tagged with \`workspace: "$INSTANCE_NAME"\`
 
 ## Quick Start
 \`\`\`bash
-# Install dependencies
-npm install
+# Start dev server (installs deps automatically)
+./scripts/start.sh
 
-# Start servers
-npm start
-
-# Create visualizations (via Claude or MCP tools)
-# Visualizations auto-save to app/viz/
+# Or use /start in Claude Code
 \`\`\`
 EOF
 echo "✓ Created: CLAUDE.md"
@@ -284,9 +234,8 @@ git commit -m "Initial commit: Bootstrap LocalBase instance '$INSTANCE_NAME'
 Created by bootstrap-instance.sh from localbase.ai framework
 
 Instance structure:
-- Framework code: tools/, app/, electron-app/
-- Instance-specific: connectors/, data/, env.local
-- Auto-workspace tagging: visualizations tagged with workspace: '$INSTANCE_NAME'
+- Framework code: tools/, app/, scripts/
+- Instance-specific: connectors/, data/, extensions/, env.local
 
 🤖 Generated with LocalBase Framework"
 
@@ -296,10 +245,8 @@ echo ""
 echo -e "${YELLOW}📋 Next Steps:${NC}"
 echo "1. cd $INSTANCE_DIR"
 echo "2. Edit env.local with your API credentials"
-echo "3. npm install"
-echo "4. Add connectors in connectors/ directory"
-echo "5. npm start (or npm run dev)"
+echo "3. ./scripts/start.sh (installs deps and starts servers)"
 echo ""
 echo -e "${BLUE}🔄 Future framework updates:${NC}"
-echo "   ./sync-framework.sh"
+echo "   ./scripts/sync-framework.sh"
 echo ""

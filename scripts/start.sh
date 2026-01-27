@@ -25,16 +25,28 @@ if [ "$NODE_VERSION" -lt 18 ]; then
     echo -e "${YELLOW}Warning: Node.js 18+ recommended (you have $(node -v))${NC}"
 fi
 
-# Install dependencies if needed
+# Install root dependencies if needed
 if [ ! -d "node_modules" ]; then
     echo "📦 Installing dependencies..."
-    npm install
+    npm install --cache /tmp/npm-cache
 fi
 
 # Check if package-lock changed
 if [ "package.json" -nt "node_modules/.package-lock.json" ] 2>/dev/null; then
     echo "📦 Updating dependencies..."
-    npm install
+    npm install --cache /tmp/npm-cache
+fi
+
+# Install app dependencies if needed
+if [ ! -d "app/node_modules" ]; then
+    echo "📦 Installing app dependencies..."
+    (cd app && npm install --cache /tmp/npm-cache)
+fi
+
+# Check if app package-lock changed
+if [ "app/package.json" -nt "app/node_modules/.package-lock.json" ] 2>/dev/null; then
+    echo "📦 Updating app dependencies..."
+    (cd app && npm install --cache /tmp/npm-cache)
 fi
 
 # Check if ports are available
