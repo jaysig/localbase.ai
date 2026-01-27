@@ -23,6 +23,47 @@ echo -e "${GREEN}║${NC}         ${BOLD}LocalBase Installer${NC}              $
 echo -e "${GREEN}╚═══════════════════════════════════════════╝${NC}"
 echo ""
 
+# Check for existing LocalBase installation in common locations
+EXISTING_INSTALL=""
+for dir in "$HOME/localbase" "$HOME/Work/localbase.ai" "$HOME/Work/localbase" "$PWD/localbase.ai" "$PWD/localbase"; do
+    if [ -f "$dir/package.json" ] && grep -q '"name": "localbase"' "$dir/package.json" 2>/dev/null; then
+        EXISTING_INSTALL="$dir"
+        break
+    fi
+done
+
+if [ -n "$EXISTING_INSTALL" ]; then
+    echo -e "${GREEN}Found existing LocalBase installation at $EXISTING_INSTALL${NC}"
+    echo ""
+    read -p "Start LocalBase to create a new workspace? [Y/n] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        echo -e "Starting LocalBase..."
+        cd "$EXISTING_INSTALL"
+
+        # Start the server
+        npm run dev &
+        sleep 3
+
+        # Open browser
+        if command -v open &> /dev/null; then
+            open "http://localhost:5173"
+        elif command -v xdg-open &> /dev/null; then
+            xdg-open "http://localhost:5173"
+        fi
+
+        echo ""
+        echo -e "${GREEN}LocalBase is running!${NC}"
+        echo ""
+        echo -e "  Create a new workspace from the ${BOLD}workspace dropdown${NC} in the header."
+        echo ""
+        echo -e "  ${BOLD}Browser:${NC} http://localhost:5173"
+        echo ""
+        exit 0
+    fi
+    echo ""
+fi
+
 # Prompt for install directory
 echo -e "${BOLD}Where would you like to install LocalBase?${NC}"
 echo -e "  Default: ${GREEN}$DEFAULT_DIR${NC}"
@@ -63,16 +104,44 @@ fi
 
 # Check if directory exists
 if [ -d "$INSTALL_DIR" ]; then
-    echo -e "${YELLOW}Directory $INSTALL_DIR already exists${NC}"
-    read -p "Update existing installation? [y/N] " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Updating..."
+    # Check if it's a LocalBase installation
+    if [ -f "$INSTALL_DIR/package.json" ] && grep -q "localbase" "$INSTALL_DIR/package.json" 2>/dev/null; then
+        echo -e "${GREEN}LocalBase is already installed at $INSTALL_DIR${NC}"
+        echo ""
+        echo -e "Starting LocalBase so you can create a new workspace..."
         cd "$INSTALL_DIR"
-        git pull origin main
-    else
-        echo "Aborted"
+
+        # Start the server and open browser
+        npm run dev &
+        sleep 3
+
+        # Open browser
+        if command -v open &> /dev/null; then
+            open "http://localhost:5173"
+        elif command -v xdg-open &> /dev/null; then
+            xdg-open "http://localhost:5173"
+        fi
+
+        echo ""
+        echo -e "${GREEN}LocalBase is running!${NC}"
+        echo ""
+        echo -e "  Create a new workspace from the ${BOLD}workspace dropdown${NC} in the header."
+        echo ""
+        echo -e "  ${BOLD}Browser:${NC} http://localhost:5173"
+        echo ""
         exit 0
+    else
+        echo -e "${YELLOW}Directory $INSTALL_DIR already exists but is not a LocalBase installation${NC}"
+        read -p "Install LocalBase here anyway? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Aborted"
+            exit 0
+        fi
+        # Continue with clone into existing directory
+        echo -e "${GREEN}Cloning LocalBase...${NC}"
+        git clone --depth 1 "$REPO" "$INSTALL_DIR"
+        cd "$INSTALL_DIR"
     fi
 else
     # Clone repo
