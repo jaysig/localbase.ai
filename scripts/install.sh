@@ -45,19 +45,17 @@ if [ -n "$EXISTING_INSTALL" ]; then
         npm run dev &
         sleep 3
 
-        # Open browser
+        # Open browser directly to create workspace
         if command -v open &> /dev/null; then
-            open "http://localhost:5173"
+            open "http://localhost:5173?action=create-workspace"
         elif command -v xdg-open &> /dev/null; then
-            xdg-open "http://localhost:5173"
+            xdg-open "http://localhost:5173?action=create-workspace"
         fi
 
         echo ""
         echo -e "${GREEN}LocalBase is running!${NC}"
         echo ""
-        echo -e "  Create a new workspace from the ${BOLD}workspace dropdown${NC} in the header."
-        echo ""
-        echo -e "  ${BOLD}Browser:${NC} http://localhost:5173"
+        echo -e "  Enter a name for your new workspace in the browser."
         echo ""
         exit 0
     fi
@@ -115,19 +113,17 @@ if [ -d "$INSTALL_DIR" ]; then
         npm run dev &
         sleep 3
 
-        # Open browser
+        # Open browser directly to create workspace
         if command -v open &> /dev/null; then
-            open "http://localhost:5173"
+            open "http://localhost:5173?action=create-workspace"
         elif command -v xdg-open &> /dev/null; then
-            xdg-open "http://localhost:5173"
+            xdg-open "http://localhost:5173?action=create-workspace"
         fi
 
         echo ""
         echo -e "${GREEN}LocalBase is running!${NC}"
         echo ""
-        echo -e "  Create a new workspace from the ${BOLD}workspace dropdown${NC} in the header."
-        echo ""
-        echo -e "  ${BOLD}Browser:${NC} http://localhost:5173"
+        echo -e "  Enter a name for your new workspace in the browser."
         echo ""
         exit 0
     else

@@ -40,6 +40,14 @@ export default function Home({ onWorkspaceSelected }) {
     }
     loadWorkspace()
     scanForProjects()
+
+    // Check for action query param to auto-open create form
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('action') === 'create-workspace') {
+      setShowCreateForm(true)
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   // Scan for available projects
