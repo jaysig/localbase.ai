@@ -270,16 +270,25 @@ async function executeTool(toolName, toolInput, workspace) {
 
         const db = new Database(dbPath, { readonly: true });
         try {
+          // Get list of valid tables
+          const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+          const validTables = tables.map(t => t.name);
+
           // Get table list if no specific table requested
           if (!toolInput.table) {
-            const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
             db.close();
-            return { tables: tables.map(t => t.name) };
+            return { tables: validTables };
           }
 
-          // Get schema for specific table
-          const schema = db.prepare(`PRAGMA table_info(${toolInput.table})`).all();
-          const sampleRow = db.prepare(`SELECT * FROM ${toolInput.table} LIMIT 1`).get();
+          // Security: Validate table name against actual tables (prevents SQL injection)
+          if (!validTables.includes(toolInput.table)) {
+            db.close();
+            return { error: `Table not found: ${toolInput.table}` };
+          }
+
+          // Get schema for specific table (use bracket notation for safety)
+          const schema = db.prepare(`PRAGMA table_info([${toolInput.table}])`).all();
+          const sampleRow = db.prepare(`SELECT * FROM [${toolInput.table}] LIMIT 1`).get();
           db.close();
 
           return {

@@ -124,7 +124,8 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Block access to sensitive files and path traversal
 const SENSITIVE_FILES = ['env.local', '.env', 'credentials.json', '.git', '.gitignore'];
@@ -1401,30 +1402,61 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
       return res.status(400).json({ success: false, error: `Data source '${id}' has no sync_script or update_command configured` });
     }
 
-    // Handle full command (e.g., "node connectors/hubspot/sync-deals.js") or just script path
-    let scriptPath, command;
-    if (syncCommand.startsWith('node ')) {
-      scriptPath = syncCommand.replace('node ', '');
-      command = syncCommand;
-    } else {
-      scriptPath = syncCommand;
-      command = `node "${syncCommand}"`;
+    // Extract script path (strip "node " prefix if present)
+    const scriptPath = syncCommand.startsWith('node ')
+      ? syncCommand.replace('node ', '')
+      : syncCommand;
+
+    // Security: Validate script path has no shell metacharacters
+    const dangerousChars = /[;|&`$(){}!\\'"<>*?\[\]\n\r]/;
+    if (dangerousChars.test(scriptPath)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Script path contains invalid characters'
+      });
     }
 
     const fullScriptPath = join(currentWorkspace, scriptPath);
+
+    // Security: Ensure resolved path is within workspace
+    const normalizedScript = normalize(fullScriptPath);
+    const normalizedWorkspace = normalize(currentWorkspace);
+    if (!normalizedScript.startsWith(normalizedWorkspace + '/')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Script path must be within workspace'
+      });
+    }
+
     if (!existsSync(fullScriptPath)) {
       return res.status(404).json({ success: false, error: `Sync script not found: ${scriptPath}` });
     }
 
-    console.log(`🔄 Running sync for ${id}: ${command}`);
+    console.log(`🔄 Running sync for ${id}: node ${scriptPath}`);
 
-    const output = execSync(command, {
+    // Security: Use spawnSync with array args to prevent shell injection
+    const { spawnSync } = await import('child_process');
+    const result = spawnSync('node', [fullScriptPath], {
       cwd: currentWorkspace,
       encoding: 'utf-8',
       timeout: 300000, // 5 minute timeout
-      env: { ...process.env }
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        NODE_ENV: process.env.NODE_ENV
+        // Only pass safe env vars, not secrets
+      }
     });
 
+    if (result.error) {
+      throw result.error;
+    }
+
+    if (result.status !== 0) {
+      throw new Error(result.stderr || `Process exited with code ${result.status}`);
+    }
+
+    const output = result.stdout;
     console.log(`✅ Sync completed for ${id}`);
 
     // Update last_sync date in data-sources.json
@@ -1439,7 +1471,7 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
-      output: error.stdout || error.stderr || ''
+      output: ''
     });
   }
 });
