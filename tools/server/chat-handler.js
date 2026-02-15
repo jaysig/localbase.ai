@@ -17,6 +17,7 @@ const __dirname = dirname(__filename);
 // Clients will be initialized lazily with workspace env
 let anthropic = null;
 let openai = null;
+let gemini = null;
 let lastEnvWorkspace = null;
 
 /**
@@ -36,6 +37,7 @@ function loadEnv(workspace) {
   // Reset clients so they pick up new credentials
   openai = null;
   anthropic = null;
+  gemini = null;
 }
 
 /**
@@ -47,7 +49,8 @@ export function getChatConfig() {
     model: process.env.CHAT_MODEL || 'gpt-4o',
     availableProviders: [
       { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'o1', 'o1-mini'] },
-      { id: 'anthropic', name: 'Anthropic', models: ['claude-opus-4-20250514', 'claude-sonnet-4-20250514'] }
+      { id: 'anthropic', name: 'Anthropic', models: ['claude-opus-4-20250514', 'claude-sonnet-4-20250514'] },
+      { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'] }
     ]
   };
 }
@@ -72,6 +75,20 @@ function getOpenAIClient(workspace) {
     openai = new OpenAI();
   }
   return openai;
+}
+
+/**
+ * Initialize Gemini client (via OpenAI-compatible endpoint)
+ */
+function getGeminiClient(workspace) {
+  loadEnv(workspace);
+  if (!gemini) {
+    gemini = new OpenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/'
+    });
+  }
+  return gemini;
 }
 
 // Tool definitions for Claude
@@ -578,8 +595,8 @@ async function handleAnthropicChat(messages, workspace, systemPrompt, model) {
 /**
  * Handle a chat request with OpenAI GPT
  */
-async function handleOpenAIChat(messages, workspace, systemPrompt, model) {
-  const client = getOpenAIClient(workspace);
+async function handleOpenAIChat(messages, workspace, systemPrompt, model, client = null) {
+  if (!client) client = getOpenAIClient(workspace);
   const openaiMessages = [
     { role: 'system', content: systemPrompt },
     ...messages.map(m => ({ role: m.role, content: m.content }))
@@ -666,6 +683,8 @@ Use read_visualization to get the current code, then use create_visualization wi
     let result;
     if (provider === 'anthropic') {
       result = await handleAnthropicChat(messages, workspace, systemPrompt, model);
+    } else if (provider === 'gemini') {
+      result = await handleOpenAIChat(messages, workspace, systemPrompt, model, getGeminiClient(workspace));
     } else {
       result = await handleOpenAIChat(messages, workspace, systemPrompt, model);
     }

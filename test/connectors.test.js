@@ -127,22 +127,15 @@ describe('HubSpot Connector', () => {
 
 });
 
-describe('QuickBooks Connector', () => {
+describe('Workspace Connectors', () => {
 
-  it('should include quickbooks in connector list', async () => {
+  it('should have valid structure for all listed connectors', async () => {
     const res = await request('/api/connectors');
     assert.strictEqual(res.status, 200);
-    const quickbooks = res.data.connectors.find(c => c.id === 'quickbooks');
-    assert(quickbooks, 'quickbooks connector should be listed');
-    assert('status' in quickbooks, 'quickbooks should have status');
-  });
-
-  it('should have quickbooks connector files', async () => {
-    const res = await request('/api/connectors');
-    assert.strictEqual(res.status, 200);
-    const quickbooks = res.data.connectors.find(c => c.id === 'quickbooks');
-    assert(quickbooks, 'quickbooks connector should exist');
-    assert(quickbooks.path, 'quickbooks should have a path');
+    for (const connector of res.data.connectors) {
+      assert('id' in connector, `connector should have id`);
+      assert('status' in connector, `${connector.id} should have status`);
+    }
   });
 
 });

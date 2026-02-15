@@ -1966,7 +1966,7 @@ app.post('/api/chat', async (req, res) => {
     }
 
     // Call the chat handler
-    const result = await handleChat(messages, currentWorkspace, currentViz, provider, model);
+    const result = await handleChat(messages, currentWorkspace, currentViz, { provider, model });
 
     res.json(result);
   } catch (error) {
