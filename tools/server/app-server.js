@@ -158,6 +158,84 @@ let currentWorkspace = sanitizePath(getCurrentWorkspace());
 // Initialize conversation store
 initConversationStore(currentWorkspace);
 
+// Load env.local for API keys (Foursquare, admin key, etc.)
+const envLocalPath = join(currentWorkspace, 'env.local');
+if (existsSync(envLocalPath)) {
+  const envContent = readFileSync(envLocalPath, 'utf-8');
+  envContent.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const eqIndex = trimmed.indexOf('=');
+      if (eqIndex > 0) {
+        const key = trimmed.substring(0, eqIndex);
+        const value = trimmed.substring(eqIndex + 1);
+        if (!process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Initialize claims database table
+ * Creates the table if it doesn't exist, and adds new columns for migration
+ */
+function initClaimsDb(workspace) {
+  const dbPath = join(workspace, 'data', 'claims.db');
+
+  // Ensure data directory exists
+  const dataDir = join(workspace, 'data');
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+  }
+
+  const db = new Database(dbPath);
+
+  // Create table if not exists (with all columns including address)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS claims (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      business_name TEXT NOT NULL,
+      contact_name TEXT,
+      email TEXT,
+      phone TEXT,
+      website TEXT,
+      address TEXT,
+      city TEXT,
+      state TEXT,
+      zip_code TEXT,
+      category TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // Migration: add columns if they don't exist (safe for existing DBs)
+  const columns = db.pragma('table_info(claims)').map(c => c.name);
+  const newColumns = [
+    { name: 'address', type: 'TEXT' },
+    { name: 'city', type: 'TEXT' },
+    { name: 'state', type: 'TEXT' },
+    { name: 'zip_code', type: 'TEXT' },
+    { name: 'category', type: 'TEXT' },
+    { name: 'updated_at', type: 'TEXT' },
+  ];
+  for (const col of newColumns) {
+    if (!columns.includes(col.name)) {
+      db.exec(`ALTER TABLE claims ADD COLUMN ${col.name} ${col.type}`);
+      console.log(`   📋 Added column ${col.name} to claims table`);
+    }
+  }
+
+  db.close();
+  console.log(`📋 Claims database initialized: ${dbPath}`);
+}
+
+// Initialize claims DB
+initClaimsDb(currentWorkspace);
+
 // Detect if running from framework (localbase.ai) vs instance
 const cwd = process.cwd();
 const frameworkRoot = join(dirname(__dirname), '..'); // tools/server -> tools -> root
@@ -246,7 +324,7 @@ app.use((req, res, next) => {
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
   }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -296,6 +374,9 @@ function switchWorkspace(workspacePath) {
 
   // Re-initialize conversation store for new workspace
   initConversationStore(currentWorkspace);
+
+  // Re-initialize claims DB for new workspace
+  initClaimsDb(currentWorkspace);
 
   // Persist workspace selection
   setCurrentWorkspace(currentWorkspace);
@@ -1975,6 +2056,226 @@ app.post('/api/chat', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+// =============================================================================
+// CLAIMS API
+// =============================================================================
+
+/**
+ * POST /api/claims
+ * Submit a new business claim
+ */
+app.post('/api/claims', (req, res) => {
+  try {
+    const { business_name, contact_name, email, phone, website, address, city, state, zip_code, category } = req.body;
+
+    if (!business_name) {
+      return res.status(400).json({ success: false, error: 'business_name is required' });
+    }
+
+    const dbPath = join(currentWorkspace, 'data', 'claims.db');
+    const db = new Database(dbPath);
+
+    const stmt = db.prepare(`
+      INSERT INTO claims (business_name, contact_name, email, phone, website, address, city, state, zip_code, category)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      business_name,
+      contact_name || null,
+      email || null,
+      phone || null,
+      website || null,
+      address || null,
+      city || null,
+      state || null,
+      zip_code || null,
+      category || null
+    );
+
+    db.close();
+
+    console.log(`📋 New claim submitted: ${business_name} (ID: ${result.lastInsertRowid})`);
+
+    res.json({
+      success: true,
+      claim: {
+        id: result.lastInsertRowid,
+        business_name,
+        status: 'pending'
+      }
+    });
+  } catch (error) {
+    console.error('Claims POST error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/claims
+ * List all claims (optionally filter by status)
+ */
+app.get('/api/claims', (req, res) => {
+  try {
+    const { status } = req.query;
+    const dbPath = join(currentWorkspace, 'data', 'claims.db');
+
+    if (!existsSync(dbPath)) {
+      return res.json({ success: true, claims: [] });
+    }
+
+    const db = new Database(dbPath, { readonly: true });
+
+    let claims;
+    if (status) {
+      claims = db.prepare('SELECT * FROM claims WHERE status = ? ORDER BY created_at DESC').all(status);
+    } else {
+      claims = db.prepare('SELECT * FROM claims ORDER BY created_at DESC').all();
+    }
+
+    db.close();
+
+    res.json({ success: true, claims });
+  } catch (error) {
+    console.error('Claims GET error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/claims/:id
+ * Update claim status (approve/reject). Requires ADMIN_KEY query param.
+ */
+app.patch('/api/claims/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { key } = req.query;
+    const { status } = req.body;
+
+    // Require ADMIN_KEY
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey || key !== adminKey) {
+      return res.status(403).json({ success: false, error: 'Invalid or missing admin key' });
+    }
+
+    if (!status || !['approved', 'rejected', 'pending'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'status must be approved, rejected, or pending' });
+    }
+
+    const dbPath = join(currentWorkspace, 'data', 'claims.db');
+    const db = new Database(dbPath);
+
+    const result = db.prepare(
+      "UPDATE claims SET status = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(status, id);
+
+    db.close();
+
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, error: 'Claim not found' });
+    }
+
+    console.log(`📋 Claim ${id} updated to: ${status}`);
+
+    res.json({ success: true, id: Number(id), status });
+  } catch (error) {
+    console.error('Claims PATCH error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =============================================================================
+// SEARCH API
+// =============================================================================
+
+/**
+ * GET /api/search
+ * Search for businesses via Foursquare + merge approved local claims
+ * Query params: query (required), near (optional, defaults to location)
+ */
+app.get('/api/search', async (req, res) => {
+  try {
+    const { query, near } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ success: false, error: 'query parameter is required' });
+    }
+
+    const results = [];
+
+    // 1. Query approved claims from local DB
+    const dbPath = join(currentWorkspace, 'data', 'claims.db');
+    if (existsSync(dbPath)) {
+      const db = new Database(dbPath, { readonly: true });
+      const searchTerm = `%${query}%`;
+      const localClaims = db.prepare(
+        'SELECT * FROM claims WHERE status = ? AND (business_name LIKE ? OR category LIKE ?)'
+      ).all('approved', searchTerm, searchTerm);
+      db.close();
+
+      // Map claims to unified business shape
+      for (const claim of localClaims) {
+        results.push({
+          id: `claim-${claim.id}`,
+          name: claim.business_name,
+          phone: claim.phone || '',
+          website: claim.website || '',
+          address: claim.address || '',
+          city: claim.city || '',
+          state: claim.state || '',
+          zip_code: claim.zip_code || '',
+          category: claim.category || '',
+          source: 'claimed',
+        });
+      }
+    }
+
+    // 2. Query Foursquare Places API
+    const fsqKey = process.env.FOURSQUARE_API_KEY;
+    if (fsqKey) {
+      try {
+        const params = new URLSearchParams({ query, limit: '10' });
+        if (near) params.set('near', near);
+
+        const fsqRes = await fetch(`https://api.foursquare.com/v3/places/search?${params}`, {
+          headers: {
+            'Authorization': fsqKey,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (fsqRes.ok) {
+          const data = await fsqRes.json();
+          for (const place of (data.results || [])) {
+            const loc = place.location || {};
+            results.push({
+              id: place.fsq_id,
+              name: place.name,
+              phone: place.tel || '',
+              website: place.website || '',
+              address: loc.address || '',
+              city: loc.locality || '',
+              state: loc.region || '',
+              zip_code: loc.postcode || '',
+              category: (place.categories || []).map(c => c.name).join(', '),
+              source: 'foursquare',
+            });
+          }
+        } else {
+          console.warn(`⚠️ Foursquare API error: ${fsqRes.status}`);
+        }
+      } catch (fsqError) {
+        console.warn('⚠️ Foursquare API request failed:', fsqError.message);
+      }
+    }
+
+    res.json({ success: true, results, total: results.length });
+  } catch (error) {
+    console.error('Search API error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
