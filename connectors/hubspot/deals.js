@@ -384,6 +384,65 @@ export class HubSpotDeals {
       transaction(allDeals);
       console.log(`✅ Saved ${allDeals.length} deals to database`);
 
+      // Sync line items
+      console.log('\n📦 Syncing line items...');
+
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS line_items (
+          id TEXT PRIMARY KEY,
+          deal_id TEXT,
+          name TEXT,
+          amount REAL,
+          price REAL,
+          quantity REAL,
+          product_id TEXT,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (deal_id) REFERENCES deals(id)
+        )
+      `).run();
+
+      db.prepare('DELETE FROM line_items').run();
+
+      const insertLineItem = db.prepare(`
+        INSERT INTO line_items (id, deal_id, name, amount, price, quantity, product_id, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `);
+
+      let totalLineItems = 0;
+
+      for (const deal of allDeals) {
+        try {
+          const assocResponse = await this.client.makeRequest(
+            `/crm/v4/objects/deals/${deal.id}/associations/line_items`
+          );
+
+          const lineItemIds = (assocResponse.results || []).map(r => r.toObjectId);
+          if (lineItemIds.length === 0) continue;
+
+          for (const liId of lineItemIds) {
+            const liResponse = await this.client.makeRequest(
+              `/crm/v3/objects/line_items/${liId}`,
+              { params: { properties: 'name,amount,price,quantity,hs_product_id' } }
+            );
+            const props = liResponse.properties || {};
+            insertLineItem.run(
+              liId,
+              deal.id,
+              props.name || null,
+              parseFloat(props.amount) || null,
+              parseFloat(props.price) || null,
+              parseFloat(props.quantity) || null,
+              props.hs_product_id || null
+            );
+            totalLineItems++;
+          }
+        } catch (e) {
+          console.warn(`   ⚠️ Could not fetch line items for deal ${deal.id}: ${e.message}`);
+        }
+      }
+
+      console.log(`✅ Saved ${totalLineItems} line items`);
+
       // Get stats
       const stats = db.prepare(`
         SELECT
@@ -400,6 +459,7 @@ export class HubSpotDeals {
       console.log(`   Won: ${stats.won} ($${(stats.won_value || 0).toLocaleString()})`);
       console.log(`   Lost: ${stats.lost}`);
       console.log(`   Open: ${stats.open}`);
+      console.log(`   Line items: ${totalLineItems}`);
 
       console.log('\n🎉 HubSpot deals database update complete!');
 

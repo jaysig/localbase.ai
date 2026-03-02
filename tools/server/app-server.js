@@ -236,6 +236,48 @@ function initClaimsDb(workspace) {
 // Initialize claims DB
 initClaimsDb(currentWorkspace);
 
+/**
+ * Initialize flows database table
+ * Creates the table if it doesn't exist
+ */
+function initFlowsDb(workspace) {
+  const dbPath = join(workspace, 'data', 'flows.db');
+
+  const dataDir = join(workspace, 'data');
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true });
+  }
+
+  const db = new Database(dbPath);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS flow_submissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      flow_slug TEXT NOT NULL,
+      flow_type TEXT,
+      name TEXT,
+      email TEXT,
+      phone TEXT,
+      address TEXT,
+      qualify_score TEXT,
+      urgency_level TEXT,
+      flow_data JSON,
+      utm_source TEXT,
+      utm_medium TEXT,
+      utm_campaign TEXT,
+      status TEXT DEFAULT 'new',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.close();
+  console.log(`🔀 Flows database initialized: ${dbPath}`);
+}
+
+// Initialize flows DB
+initFlowsDb(currentWorkspace);
+
 // Detect if running from framework (localbase.ai) vs instance
 const cwd = process.cwd();
 const frameworkRoot = join(dirname(__dirname), '..'); // tools/server -> tools -> root
@@ -377,6 +419,9 @@ function switchWorkspace(workspacePath) {
 
   // Re-initialize claims DB for new workspace
   initClaimsDb(currentWorkspace);
+
+  // Re-initialize flows DB for new workspace
+  initFlowsDb(currentWorkspace);
 
   // Persist workspace selection
   setCurrentWorkspace(currentWorkspace);
@@ -1615,6 +1660,19 @@ app.post('/api/env/save', (req, res) => {
 });
 
 /**
+ * GET /api/env/:key
+ * Read a single public env var. Only whitelisted keys are exposed.
+ */
+const PUBLIC_ENV_KEYS = ['MAPBOX_TOKEN'];
+app.get('/api/env/:key', (req, res) => {
+  const { key } = req.params;
+  if (!PUBLIC_ENV_KEYS.includes(key)) {
+    return res.status(403).json({ success: false, error: 'Key not available' });
+  }
+  res.json({ success: true, value: process.env[key] || null });
+});
+
+/**
  * POST /api/datasources/:id/sync
  * Run sync for a data source
  */
@@ -2188,6 +2246,153 @@ app.patch('/api/claims/:id', (req, res) => {
 });
 
 // =============================================================================
+// FLOWS API
+// =============================================================================
+
+/**
+ * POST /api/flows/:slug/submit
+ * Submit a new flow lead (public, unauthenticated)
+ */
+app.post('/api/flows/:slug/submit', (req, res) => {
+  try {
+    const { slug } = req.params;
+    const { flow_type, name, email, phone, address, qualify_score, urgency_level, flow_data, utm_source, utm_medium, utm_campaign } = req.body;
+
+    if (!name || !email || !phone) {
+      return res.status(400).json({ success: false, error: 'name, email, and phone are required' });
+    }
+
+    const dbPath = join(currentWorkspace, 'data', 'flows.db');
+    const db = new Database(dbPath);
+
+    const stmt = db.prepare(`
+      INSERT INTO flow_submissions (flow_slug, flow_type, name, email, phone, address, qualify_score, urgency_level, flow_data, utm_source, utm_medium, utm_campaign)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const result = stmt.run(
+      slug,
+      flow_type || null,
+      name,
+      email,
+      phone,
+      address || null,
+      qualify_score || null,
+      urgency_level || null,
+      flow_data ? JSON.stringify(flow_data) : null,
+      utm_source || null,
+      utm_medium || null,
+      utm_campaign || null
+    );
+
+    db.close();
+
+    console.log(`🔀 Flow submission: ${slug} — ${name} (ID: ${result.lastInsertRowid})`);
+
+    res.json({
+      success: true,
+      id: result.lastInsertRowid,
+      qualifyScore: qualify_score || null,
+      urgencyLevel: urgency_level || null
+    });
+  } catch (error) {
+    console.error('Flows POST error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/flows/submissions
+ * List all flow submissions (optionally filter by flow_slug or status)
+ */
+app.get('/api/flows/submissions', (req, res) => {
+  try {
+    const { flow_slug, status } = req.query;
+    const dbPath = join(currentWorkspace, 'data', 'flows.db');
+
+    if (!existsSync(dbPath)) {
+      return res.json({ success: true, submissions: [] });
+    }
+
+    const db = new Database(dbPath, { readonly: true });
+
+    let sql = 'SELECT * FROM flow_submissions';
+    const conditions = [];
+    const params = [];
+
+    if (flow_slug) {
+      conditions.push('flow_slug = ?');
+      params.push(flow_slug);
+    }
+    if (status) {
+      conditions.push('status = ?');
+      params.push(status);
+    }
+
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+    sql += ' ORDER BY created_at DESC';
+
+    const submissions = db.prepare(sql).all(...params);
+    db.close();
+
+    // Parse flow_data JSON for each submission
+    for (const sub of submissions) {
+      if (sub.flow_data) {
+        try { sub.flow_data = JSON.parse(sub.flow_data); } catch (e) {}
+      }
+    }
+
+    res.json({ success: true, submissions });
+  } catch (error) {
+    console.error('Flows GET error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/flows/submissions/:id
+ * Update flow submission status. Requires ADMIN_KEY query param.
+ */
+app.patch('/api/flows/submissions/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { key } = req.query;
+    const { status } = req.body;
+
+    const adminKey = process.env.ADMIN_KEY;
+    if (!adminKey || key !== adminKey) {
+      return res.status(403).json({ success: false, error: 'Invalid or missing admin key' });
+    }
+
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'status is required' });
+    }
+
+    const dbPath = join(currentWorkspace, 'data', 'flows.db');
+    const db = new Database(dbPath);
+
+    const result = db.prepare(
+      "UPDATE flow_submissions SET status = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(status, id);
+
+    db.close();
+
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, error: 'Submission not found' });
+    }
+
+    console.log(`🔀 Flow submission ${id} updated to: ${status}`);
+
+    res.json({ success: true, id: Number(id), status });
+  } catch (error) {
+    console.error('Flows PATCH error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =============================================================================
 // SEARCH API
 // =============================================================================
 
@@ -2301,6 +2506,18 @@ app.use('/viz', (req, res, next) => {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       // Allow embedding in iframes (needed for Vite dev server on different port)
       res.removeHeader('X-Frame-Options');
+    }
+  })(req, res, next);
+});
+
+/**
+ * Serve flow files from workspace flows/ directory
+ */
+app.use('/flows', (req, res, next) => {
+  const flowsDir = join(currentWorkspace, 'flows');
+  express.static(flowsDir, {
+    setHeaders: (res, path) => {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
   })(req, res, next);
 });
