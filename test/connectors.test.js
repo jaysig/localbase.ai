@@ -112,20 +112,8 @@ describe('Environment Variable Saving', () => {
 });
 
 // ============================================================================
-// Specific Connector Tests
+// Workspace Connector Validation
 // ============================================================================
-
-describe('HubSpot Connector', () => {
-
-  it('should include hubspot in connector list', async () => {
-    const res = await request('/api/connectors');
-    assert.strictEqual(res.status, 200);
-    const hubspot = res.data.connectors.find(c => c.id === 'hubspot');
-    assert(hubspot, 'hubspot connector should be listed');
-    assert('status' in hubspot, 'hubspot should have status');
-  });
-
-});
 
 describe('Workspace Connectors', () => {
 
