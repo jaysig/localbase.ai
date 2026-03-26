@@ -20,6 +20,7 @@ rsync -av --delete \
   --exclude '.DS_Store' \
   --exclude 'src/components/tools/' \
   --exclude 'src/components/crm/' \
+  --exclude 'src/components/index/' \
   $FRAMEWORK_DIR/app/ $INSTANCE_DIR/app/
 
 # Sync tools/ framework
@@ -50,11 +51,15 @@ cp $FRAMEWORK_DIR/connectors/MCPAdapter.js $INSTANCE_DIR/connectors/ 2>/dev/null
 cp $FRAMEWORK_DIR/connectors/APIClient.js $INSTANCE_DIR/connectors/ 2>/dev/null || true
 
 # Sync viz/ html templates (but not instance-specific visualizations)
+# Only copies generic templates — company profiles and instance vizzes stay local
 echo "📊 Syncing viz/ templates..."
 mkdir -p $INSTANCE_DIR/viz
-# Only sync framework templates if they exist
 for f in $FRAMEWORK_DIR/viz/*.html; do
-  [ -e "$f" ] && cp "$f" $INSTANCE_DIR/viz/ 2>/dev/null || true
+  [ -e "$f" ] || continue
+  basename=$(basename "$f")
+  # Skip instance-specific vizzes (company profiles, etc.)
+  case "$basename" in company-profile-*|five-elms-*|sales-pipeline*) continue ;; esac
+  cp "$f" $INSTANCE_DIR/viz/
 done
 
 # Sync templates/ (project templates, etc.)
@@ -84,6 +89,7 @@ echo "   - data/"
 echo "   - env.local"
 echo "   - app/src/components/tools/ (instance components)"
 echo "   - app/src/components/crm/ (instance components)"
+echo "   - app/src/components/index/ (localbase-index components)"
 echo ""
 echo "📦 TEMPLATES (synced, copy to use):"
 echo "   - templates/projects/task-agent → cp to projects/my-agent"
