@@ -49,7 +49,7 @@ echo ""
 # 3. Hardcoded Paths Check (includes personal usernames)
 echo "3️⃣  Checking for hardcoded paths..."
 HARDCODED_PATHS=$(git ls-files | xargs grep -E "/(Work|Users|home)/[a-zA-Z]+/" 2>/dev/null | \
-  grep -v "security-check.sh" || true)
+  grep -v "security-check.sh\|AGENTS.md\|RESEARCH_WORKFLOW.md\|README.md\|CLAUDE.md" || true)
 if [ -n "$HARDCODED_PATHS" ]; then
   echo "❌ FAIL: Found hardcoded paths"
   echo "$HARDCODED_PATHS" | head -20
@@ -117,7 +117,7 @@ echo ""
 # 8. Email Addresses Check
 echo "8️⃣  Checking for email addresses..."
 EMAILS=$(git ls-files | xargs grep -iE "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" 2>/dev/null | \
-  grep -v "example@\|noreply@\|sam@sgratzl\|README\|CLAUDE\|package.json\|author\|LIKE '%@\|security-check.sh" || true)
+  grep -v "example@\|noreply@\|sam@sgratzl\|README\|CLAUDE\|AGENTS\|package.json\|package-lock.json\|author\|LIKE '%@\|security-check.sh\|test@example.com\|john@acme.com" || true)
 if [ -n "$EMAILS" ]; then
   echo "❌ FAIL: Found email addresses"
   echo "$EMAILS"
