@@ -2,8 +2,8 @@
   "system": "unified_viz_factory",
   "description": "Consolidated visualization creation system using ApexCharts and Chart.js",
   "location": "lib/viz/index.js",
-  "registry": "web-app/assets/visualizations.json",
-  "output_directory": "web-app/viz/",
+  "registry": "viz/visualizations.json",
+  "output_directory": "viz/",
   "factory_api": {
     "import": "import { VizFactory } from './lib/viz/index.js'",
     "initialization": "const factory = new VizFactory()"
@@ -52,7 +52,7 @@
     }
   },
   "visualization_registry": {
-    "location": "app/assets/visualizations.json",
+    "location": "viz/visualizations.json",
     "structure": {
       "visualizations": "array - List of visualization metadata",
       "lastUpdated": "string - ISO timestamp",
@@ -76,7 +76,7 @@
     "1. Load data from connector (HubSpot, Mixpanel, etc.)",
     "2. Transform data to visualization format",
     "3. Call factory.create(type, config)",
-    "4. Visualization auto-saves to app/viz/",
+    "4. Visualization auto-saves to viz/",
     "5. Registry automatically updates metadata",
     "6. Dashboard detects new visualization within 30 seconds",
     "7. Visualization appears as embedded tab"

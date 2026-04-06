@@ -12,6 +12,10 @@ import { homedir } from 'os';
 const CONFIG_DIR = join(homedir(), '.localbase');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
+function isLocalBaseWorkspace(workspacePath) {
+  return existsSync(join(workspacePath, 'viz', 'visualizations.json'));
+}
+
 /**
  * Detect available LocalBase workspaces
  * Scans ~/Work for directories containing viz/visualizations.json
@@ -44,9 +48,7 @@ export function detectWorkspaces() {
       }
 
       // Check for viz/visualizations.json (current pattern)
-      const vizPath = join(fullPath, 'viz', 'visualizations.json');
-
-      if (existsSync(vizPath)) {
+      if (isLocalBaseWorkspace(fullPath)) {
         workspaces.push({
           name: entry,
           path: fullPath
@@ -98,11 +100,16 @@ export function writeConfig(config) {
  * Get the current workspace (from config or default)
  */
 export function getCurrentWorkspace() {
+  const cwd = process.cwd();
+  if (isLocalBaseWorkspace(cwd)) {
+    return cwd;
+  }
+
   const config = readConfig();
 
   if (config && config.currentWorkspace) {
     // Validate that the workspace still exists
-    if (existsSync(config.currentWorkspace)) {
+    if (isLocalBaseWorkspace(config.currentWorkspace)) {
       return config.currentWorkspace;
     }
   }

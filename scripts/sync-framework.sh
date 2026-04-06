@@ -69,6 +69,13 @@ rsync -av --delete \
   --exclude '.DS_Store' \
   $FRAMEWORK_DIR/templates/ $INSTANCE_DIR/templates/
 
+# Sync shared test suite without deleting instance-specific tests
+echo "🧪 Syncing test/..."
+mkdir -p $INSTANCE_DIR/test
+rsync -av \
+  --exclude '.DS_Store' \
+  $FRAMEWORK_DIR/test/ $INSTANCE_DIR/test/
+
 # Clean up old directories that no longer exist in framework
 for OLD_DIR in electron-app web-app tools/connectors; do
   if [ -d "$INSTANCE_DIR/$OLD_DIR" ]; then

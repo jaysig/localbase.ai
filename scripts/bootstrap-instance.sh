@@ -85,6 +85,24 @@ rsync -av \
   "$FRAMEWORK_DIR/scripts/" "$INSTANCE_DIR/scripts/"
 echo "✓ Synced: scripts/"
 
+# Copy connector base classes
+mkdir -p "$INSTANCE_DIR/connectors"
+cp "$FRAMEWORK_DIR/connectors/MCPAdapter.js" "$INSTANCE_DIR/connectors/" 2>/dev/null || true
+cp "$FRAMEWORK_DIR/connectors/APIClient.js" "$INSTANCE_DIR/connectors/" 2>/dev/null || true
+echo "✓ Synced: connectors base classes"
+
+# Copy templates
+rsync -av \
+  --exclude '.DS_Store' \
+  "$FRAMEWORK_DIR/templates/" "$INSTANCE_DIR/templates/"
+echo "✓ Synced: templates/"
+
+# Copy framework tests
+rsync -av \
+  --exclude '.DS_Store' \
+  "$FRAMEWORK_DIR/test/" "$INSTANCE_DIR/test/"
+echo "✓ Synced: test/"
+
 # Copy .claude/commands
 rsync -av \
   --exclude '.DS_Store' \
@@ -93,8 +111,8 @@ echo "✓ Synced: .claude/commands/"
 
 # 4. Create visualizations.json
 echo -e "${BLUE}📊 Initializing visualizations registry...${NC}"
-mkdir -p app/assets
-cat > app/assets/visualizations.json <<EOF
+mkdir -p viz
+cat > viz/visualizations.json <<EOF
 {
   "visualizations": [],
   "lastUpdated": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)",
@@ -103,7 +121,16 @@ cat > app/assets/visualizations.json <<EOF
   "version": "1.0"
 }
 EOF
-echo "✓ Created: app/assets/visualizations.json"
+echo "✓ Created: viz/visualizations.json"
+
+# Copy generic viz templates
+for f in "$FRAMEWORK_DIR"/viz/*.html; do
+  [ -e "$f" ] || continue
+  basename=$(basename "$f")
+  case "$basename" in company-profile-*|five-elms-*|sales-pipeline*) continue ;; esac
+  cp "$f" "$INSTANCE_DIR/viz/"
+done
+echo "✓ Synced: viz templates"
 
 # 5. Copy package.json from framework
 echo -e "${BLUE}📦 Setting up package.json...${NC}"

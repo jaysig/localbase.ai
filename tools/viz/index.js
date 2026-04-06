@@ -296,7 +296,7 @@ export class VizFactory {
     fs.writeFileSync(fullPath, template);
 
     // Register in visualizations.json
-    const vizPath = path.join(this.baseDir, 'assets/visualizations.json');
+    const vizPath = path.join(this.vizDir, 'visualizations.json');
     let vizData = { visualizations: [], lastUpdated: new Date().toISOString(), totalVisualizations: 0, totalViews: 0 };
 
     if (fs.existsSync(vizPath)) {
