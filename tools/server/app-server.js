@@ -675,7 +675,7 @@ app.get('/api/viz/:id', async (req, res) => {
  */
 app.post('/api/viz/:id/pin', async (req, res) => {
   const { id } = req.params;
-  const { pinned } = req.body;
+  const { pinned = false } = req.body || {};
 
   try {
     // Registry now in data/assets/

@@ -95,12 +95,12 @@ describe('Visualization File Serving', () => {
 
   it('should serve viz files from /viz/ path', async () => {
     // Try to access viz-colors.js which should exist
-    const res = await fetch('http://localhost:3000/viz/viz-colors.js');
+    const res = await request('/viz/viz-colors.js');
     assert.strictEqual(res.status, 200, 'Should serve existing viz files');
   });
 
   it('should return 404 for non-existent viz files', async () => {
-    const res = await fetch('http://localhost:3000/viz/nonexistent-file.html');
+    const res = await request('/viz/nonexistent-file.html');
     assert.strictEqual(res.status, 404);
   });
 
