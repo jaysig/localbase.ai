@@ -97,6 +97,38 @@ function countFiles(dirPath, extension) {
   return count;
 }
 
+function getDataSourcesPaths(workspacePath) {
+  const dataDir = join(workspacePath, 'data');
+  return {
+    local: join(dataDir, 'data-sources.local.json'),
+    example: join(dataDir, 'data-sources.example.json')
+  };
+}
+
+function getReadableDataSourcesFile(workspacePath) {
+  const { local, example } = getDataSourcesPaths(workspacePath);
+  if (existsSync(local)) return local;
+  if (existsSync(example)) return example;
+  return null;
+}
+
+function loadDataSources(workspacePath) {
+  const filePath = getReadableDataSourcesFile(workspacePath);
+  if (!filePath) {
+    return { filePath: null, data: { sources: {} } };
+  }
+
+  const content = readFileSync(filePath, 'utf-8');
+  return { filePath, data: JSON.parse(content) };
+}
+
+function persistLocalDataSources(workspacePath, data) {
+  const { local } = getDataSourcesPaths(workspacePath);
+  mkdirSync(dirname(local), { recursive: true });
+  writeFileSync(local, JSON.stringify(data, null, 2));
+  return local;
+}
+
 /**
  * Format bytes to human readable string
  * @param {number} bytes - Size in bytes
@@ -1680,14 +1712,11 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Load data-sources.json to find the sync script
-    const dataSourcesFile = join(currentWorkspace, 'data', 'data-sources.json');
-    if (!existsSync(dataSourcesFile)) {
-      return res.status(404).json({ success: false, error: 'data-sources.json not found' });
+    // Load local runtime config first, then fall back to the tracked example
+    const { filePath: dataSourcesFile, data: dataSourcesData } = loadDataSources(currentWorkspace);
+    if (!dataSourcesFile) {
+      return res.status(404).json({ success: false, error: 'No data sources config found' });
     }
-
-    const dataSourcesContent = readFileSync(dataSourcesFile, 'utf-8');
-    const dataSourcesData = JSON.parse(dataSourcesContent);
     const source = dataSourcesData.sources?.[id];
 
     if (!source) {
@@ -1757,11 +1786,11 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
     const output = result.stdout;
     console.log(`✅ Sync completed for ${id}`);
 
-    // Update last_sync date in data-sources.json
+    // Persist last_sync only to the ignored local runtime file
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     dataSourcesData.sources[id].last_sync = today;
-    writeFileSync(dataSourcesFile, JSON.stringify(dataSourcesData, null, 2));
-    console.log(`📅 Updated last_sync for ${id} to ${today}`);
+    const localDataSourcesFile = persistLocalDataSources(currentWorkspace, dataSourcesData);
+    console.log(`📅 Updated last_sync for ${id} to ${today} in ${localDataSourcesFile}`);
 
     res.json({ success: true, output, last_sync: today });
   } catch (error) {
@@ -1776,19 +1805,17 @@ app.post('/api/datasources/:id/sync', async (req, res) => {
 
 /**
  * GET /api/datasources
- * List data sources from data/data-sources.json
+ * List data sources from local runtime config or tracked example config
  */
 app.get('/api/datasources', (req, res) => {
   try {
-    const dataSourcesFile = join(currentWorkspace, 'data', 'data-sources.json');
+    const { filePath: dataSourcesFile, data } = loadDataSources(currentWorkspace);
 
-    if (existsSync(dataSourcesFile)) {
-      const content = readFileSync(dataSourcesFile, 'utf-8');
-      const data = JSON.parse(content);
+    if (dataSourcesFile) {
       // Return sources object directly - matches what Overview.jsx expects
       res.json({ success: true, sources: data.sources || {} });
     } else {
-      // Fallback: scan for .db files if no data-sources.json exists
+      // Fallback: scan for .db files if no config exists
       const dataSources = [];
       const dataDir = join(currentWorkspace, 'data');
 

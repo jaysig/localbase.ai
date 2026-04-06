@@ -146,7 +146,7 @@ export default function Overview({ onNavigateHome }) {
         }
       }
 
-      // Load data sources from data-sources.json
+      // Load data sources from local runtime config or example config
       if (window.electronAPI?.api?.getDataSources) {
         setDataSourcesLoading(true)
         try {
@@ -782,7 +782,7 @@ export default function Overview({ onNavigateHome }) {
             <CardContent className="py-8 text-center">
               <p className="text-muted-foreground">No data sources configured</p>
               <p className="text-sm text-muted-foreground mt-2">
-                Create <code className="bg-muted px-1 py-0.5 rounded">data/data-sources.json</code> to configure sources
+                Create <code className="bg-muted px-1 py-0.5 rounded">data/data-sources.local.json</code> or copy <code className="bg-muted px-1 py-0.5 rounded">data/data-sources.example.json</code>
               </p>
             </CardContent>
           </Card>

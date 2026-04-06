@@ -6,7 +6,7 @@
       "connector": "hubspot",
       "sync_script": "node connectors/hubspot/sync-contacts.js",
       "database": "data/hubspot_contacts/hubspot-contacts.sqlite",
-      "last_sync": "2026-01-26"
+      "last_sync": null
     },
     "hubspot-companies": {
       "name": "HubSpot Companies",
@@ -14,7 +14,7 @@
       "connector": "hubspot",
       "sync_script": "node connectors/hubspot/sync-companies.js",
       "database": "data/hubspot_companies/hubspot-companies.sqlite",
-      "last_sync": "2026-01-26"
+      "last_sync": null
     },
     "hubspot-deals": {
       "name": "HubSpot Deals",

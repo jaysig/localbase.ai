@@ -16,11 +16,13 @@ data/**/*.db-shm
 data/**/*.db-wal
 data/**/*.sqlite
 data/**/*.sqlite3
+data/data-sources.local.json
 
 # Keep schema documentation
 !data/**/*schema.json
 !data/**/*schema.sql
 !data/.gitkeep
+!data/data-sources.example.json
 
 # Build output
 dist/

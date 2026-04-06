@@ -108,12 +108,13 @@ There's no wrong way. The terminal isn't scary - you've just been told it is.
 
 ## Data Setup
 
-The `data/` folder contains your SQLite databases. It's gitignored (not included in the repo) because it holds your actual business data.
+The `data/` folder contains your SQLite databases and local runtime configuration. Business data and live workspace config stay local and are gitignored.
 
 To set up:
 1. Copy `env.local.example` to `env.local` and add your API credentials
-2. Run a connector to sync data: `node connectors/example/sync.js`
-3. Or ask Claude: "Help me create a connector for [service name]"
+2. Copy `data/data-sources.example.json` to `data/data-sources.local.json` and adjust it for your workspace
+3. Run a connector to sync data: `node connectors/example/sync.js`
+4. Or ask Claude: "Help me create a connector for [service name]"
 
 ## The Dashboard
 
