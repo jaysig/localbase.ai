@@ -129,4 +129,18 @@ describe('Database Query API', () => {
     );
   });
 
+  it('POST /api/db/query should allow read-only CTE queries', async () => {
+    const res = await request('/api/db/query', {
+      method: 'POST',
+      body: {
+        database: 'data/test.db',
+        sql: 'WITH sample AS (SELECT 1 AS test) SELECT test FROM sample'
+      }
+    });
+    assert.ok(
+      res.status === 200 || res.status === 404,
+      `Expected 200 or 404, got ${res.status}`
+    );
+  });
+
 });

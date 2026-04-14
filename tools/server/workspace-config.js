@@ -12,7 +12,7 @@ import { homedir } from 'os';
 const CONFIG_DIR = join(homedir(), '.localbase');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
-function isLocalBaseWorkspace(workspacePath) {
+export function isLocalBaseWorkspace(workspacePath) {
   const vizDir = join(workspacePath, 'viz');
 
   if (existsSync(join(vizDir, 'visualizations.json'))) {
@@ -28,7 +28,9 @@ function isLocalBaseWorkspace(workspacePath) {
   return (
     existsSync(join(workspacePath, 'package.json')) &&
     existsSync(join(workspacePath, 'tools')) &&
-    existsSync(join(workspacePath, 'data'))
+    existsSync(join(workspacePath, 'data')) &&
+    existsSync(join(workspacePath, 'connectors')) &&
+    existsSync(join(workspacePath, 'scripts'))
   );
 }
 

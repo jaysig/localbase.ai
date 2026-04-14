@@ -10,6 +10,7 @@ import { basename, join, dirname, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
+import { isAllowedReadOnlySqlQuery, resolveWorkspaceDatabasePath } from './security-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -252,14 +253,19 @@ async function executeTool(toolName, toolInput, workspace) {
   try {
     switch (toolName) {
       case 'query_database': {
-        const dbPath = join(workspace, toolInput.database);
+        let dbPath;
+        try {
+          ({ dbPath } = resolveWorkspaceDatabasePath(workspace, toolInput.database));
+        } catch (error) {
+          return { error: error.message };
+        }
+
         if (!existsSync(dbPath)) {
           return { error: `Database not found: ${toolInput.database}` };
         }
 
-        // Only allow SELECT queries for safety
-        if (!toolInput.sql.trim().toUpperCase().startsWith('SELECT')) {
-          return { error: 'Only SELECT queries are allowed' };
+        if (!isAllowedReadOnlySqlQuery(toolInput.sql)) {
+          return { error: 'Only read-only SELECT queries are allowed' };
         }
 
         const db = new Database(dbPath, { readonly: true });
@@ -290,7 +296,7 @@ async function executeTool(toolName, toolInput, workspace) {
               const stat = statSync(itemPath);
               if (stat.isDirectory() && !item.startsWith('.')) {
                 findDbs(itemPath, prefix ? `${prefix}/${item}` : item);
-              } else if (item.endsWith('.db') || item.endsWith('.sqlite')) {
+              } else if (item.endsWith('.db') || item.endsWith('.sqlite') || item.endsWith('.sqlite3')) {
                 databases.push({
                   path: `data/${prefix ? prefix + '/' : ''}${item}`,
                   name: item,
@@ -306,7 +312,13 @@ async function executeTool(toolName, toolInput, workspace) {
       }
 
       case 'get_table_schema': {
-        const dbPath = join(workspace, toolInput.database);
+        let dbPath;
+        try {
+          ({ dbPath } = resolveWorkspaceDatabasePath(workspace, toolInput.database));
+        } catch (error) {
+          return { error: error.message };
+        }
+
         if (!existsSync(dbPath)) {
           return { error: `Database not found: ${toolInput.database}` };
         }

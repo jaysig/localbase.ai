@@ -117,6 +117,17 @@ describe('Path Traversal Prevention', () => {
     assert.strictEqual(res.status, 403);
   });
 
+  it('should block database paths outside the data directory', async () => {
+    const res = await request('/api/db/query', {
+      method: 'POST',
+      body: {
+        database: 'connectors/test.db',
+        sql: 'SELECT 1'
+      }
+    });
+    assert.strictEqual(res.status, 403);
+  });
+
 });
 
 // ============================================================================

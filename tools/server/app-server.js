@@ -21,11 +21,13 @@ import {
   detectWorkspaces,
   getCurrentWorkspace,
   setCurrentWorkspace,
-  getConfigPath
+  getConfigPath,
+  isLocalBaseWorkspace
 } from './workspace-config.js';
 // import { CompanyCamConnector } from '../../connectors/companycam/index.js'; // REMOVED
 import Database from 'better-sqlite3';
 import { handleChat, getChatConfig } from './chat-handler.js';
+import { isAllowedReadOnlySqlQuery, isWithinDirectory, resolveWorkspaceDatabasePath } from './security-utils.js';
 import {
   initConversationStore,
   createConversation,
@@ -170,12 +172,6 @@ function sanitizePath(p) {
 const CONNECTOR_ID_REGEX = /^[a-z0-9][a-z0-9-]{0,99}$/i;
 const ENV_KEY_REGEX = /^[A-Z_][A-Z0-9_]{0,127}$/;
 const MAX_ENV_VALUE_LENGTH = 4096;
-
-function isWithinDirectory(targetPath, baseDir) {
-  const normalizedTarget = normalize(targetPath);
-  const normalizedBase = normalize(baseDir);
-  return normalizedTarget === normalizedBase || normalizedTarget.startsWith(normalizedBase + '/');
-}
 
 function validateEnvKey(key) {
   if (typeof key !== 'string' || !ENV_KEY_REGEX.test(key)) {
@@ -547,8 +543,13 @@ app.get('/api/metrics/:metricId', async (req, res) => {
       return res.status(404).json({ error: `Metric '${metricId}' not found` });
     }
 
-    // Open database connection (resolve path relative to workspace)
-    const dbPath = join(currentWorkspace, metric.database);
+    let dbPath;
+    try {
+      ({ dbPath } = resolveWorkspaceDatabasePath(currentWorkspace, metric.database));
+    } catch (pathError) {
+      return res.status(pathError.statusCode || 400).json({ error: pathError.message });
+    }
+
     const db = new Database(dbPath, { readonly: true });
 
     try {
@@ -818,13 +819,10 @@ app.post('/api/workspace/switch', (req, res) => {
       });
     }
 
-    // Validate workspace exists (check viz/ directory)
-    const vizPath = join(safePath, 'viz', 'visualizations.json');
-
-    if (!existsSync(vizPath)) {
+    if (!isLocalBaseWorkspace(safePath)) {
       return res.status(404).json({
         success: false,
-        error: 'Invalid workspace: visualizations.json not found in viz/'
+        error: 'Invalid workspace: expected LocalBase workspace structure'
       });
     }
 
@@ -869,8 +867,28 @@ app.post('/api/workspace/create', (req, res) => {
       });
     }
 
-    // Default to ~/Work if no parent specified
-    const parent = parentDir || join(homedir(), 'Work');
+    const workDir = join(homedir(), 'Work');
+
+    // Default to ~/Work if no parent specified, and keep workspace creation inside it.
+    let parent = workDir;
+    if (parentDir) {
+      try {
+        parent = sanitizePath(parentDir);
+      } catch (e) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid parentDir: ' + e.message
+        });
+      }
+
+      if (!isWithinDirectory(parent, workDir)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Workspace parentDir must stay within ~/Work'
+        });
+      }
+    }
+
     let finalName = safeName;
     let workspacePath = join(parent, finalName);
 
@@ -979,7 +997,7 @@ app.delete('/api/workspace', (req, res) => {
     // 1. Must be in ~/Work directory
     const home = homedir();
     const workDir = join(home, 'Work');
-    if (!safePath.startsWith(workDir)) {
+    if (!isWithinDirectory(safePath, workDir)) {
       return res.status(403).json({
         success: false,
         error: 'Can only delete workspaces in ~/Work directory'
@@ -994,9 +1012,8 @@ app.delete('/api/workspace', (req, res) => {
       });
     }
 
-    // 3. Must be a valid LocalBase workspace (has viz/visualizations.json)
-    const vizPath = join(safePath, 'viz', 'visualizations.json');
-    if (!existsSync(vizPath)) {
+    // 3. Must be a valid LocalBase workspace
+    if (!isLocalBaseWorkspace(safePath)) {
       return res.status(400).json({
         success: false,
         error: 'Not a valid LocalBase workspace'
@@ -1725,18 +1742,27 @@ app.post('/api/env/save', (req, res) => {
       }
     });
 
+    let updatedCount = 0;
+    let deletedCount = 0;
+
     // Merge new vars (overwrite existing)
     try {
       Object.entries(vars).forEach(([key, value]) => {
         validateEnvKey(key);
 
-        if (value === undefined || value === null || value === '') {
+        if (value === undefined || value === '') {
+          return;
+        }
+
+        if (value === null) {
           delete existingVars[key];
+          deletedCount++;
           return;
         }
 
         validateEnvValue(value);
         existingVars[key] = value;
+        updatedCount++;
       });
     } catch (validationError) {
       if (validationError.code === 'INVALID_ENV_KEY' || validationError.code === 'INVALID_ENV_VALUE') {
@@ -1760,7 +1786,7 @@ app.post('/api/env/save', (req, res) => {
 
     res.json({
       success: true,
-      message: `Saved ${Object.keys(vars).length} environment variables`
+      message: `Updated ${updatedCount} environment variables${deletedCount ? ` and deleted ${deletedCount}` : ''}`
     });
   } catch (error) {
     console.error('Error saving env vars:', error);
@@ -2017,28 +2043,20 @@ app.post('/api/db/query', (req, res) => {
       });
     }
 
-    if (!/\.(db|sqlite|sqlite3)$/i.test(database)) {
+    if (!isAllowedReadOnlySqlQuery(sql)) {
       return res.status(400).json({
         success: false,
-        error: 'Database path must point to a SQLite file'
+        error: 'Only read-only SELECT queries are allowed'
       });
     }
 
-    if (!/^\s*SELECT\b/i.test(sql)) {
-      return res.status(400).json({
+    let dbPath;
+    try {
+      ({ dbPath } = resolveWorkspaceDatabasePath(currentWorkspace, database));
+    } catch (pathError) {
+      return res.status(pathError.statusCode || 400).json({
         success: false,
-        error: 'Only SELECT queries are allowed'
-      });
-    }
-
-    // Resolve database path relative to workspace
-    const dbPath = join(currentWorkspace, database);
-    const dataDir = join(currentWorkspace, 'data');
-
-    if (!isWithinDirectory(dbPath, dataDir)) {
-      return res.status(403).json({
-        success: false,
-        error: 'Database path must stay within the workspace data directory'
+        error: pathError.message
       });
     }
 
@@ -2063,7 +2081,11 @@ app.post('/api/db/query', (req, res) => {
       });
     } catch (queryError) {
       db.close();
-      throw queryError;
+      console.error('Database query execution error:', queryError);
+      return res.status(400).json({
+        success: false,
+        error: 'Query execution failed'
+      });
     }
   } catch (error) {
     console.error('Database query error:', error);
