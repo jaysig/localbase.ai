@@ -17,9 +17,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
-    "@modelcontextprotocol/sdk": "^1.17.5",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@observablehq/plot": "^0.6.17",
-    "axios": "^1.6.0",
+    "axios": "^1.15.0",
     "better-sqlite3": "^12.2.0",
     "chart.js": "^4.5.0",
     "chartjs-chart-venn": "^4.3.5",
@@ -43,7 +43,9 @@
     "light-my-request": "^6.6.0"
   },
   "overrides": {
+    "@hono/node-server": "1.19.14",
     "brace-expansion": "2.0.3",
+    "hono": "4.12.12",
     "path-to-regexp": "8.4.0"
   },
   "keywords": [

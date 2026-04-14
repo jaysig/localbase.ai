@@ -166,6 +166,44 @@ function sanitizePath(p) {
 
   return resolved;
 }
+
+const CONNECTOR_ID_REGEX = /^[a-z0-9][a-z0-9-]{0,99}$/i;
+const ENV_KEY_REGEX = /^[A-Z_][A-Z0-9_]{0,127}$/;
+const MAX_ENV_VALUE_LENGTH = 4096;
+
+function isWithinDirectory(targetPath, baseDir) {
+  const normalizedTarget = normalize(targetPath);
+  const normalizedBase = normalize(baseDir);
+  return normalizedTarget === normalizedBase || normalizedTarget.startsWith(normalizedBase + '/');
+}
+
+function validateEnvKey(key) {
+  if (typeof key !== 'string' || !ENV_KEY_REGEX.test(key)) {
+    const error = new Error('Environment variable names must use only A-Z, 0-9, and underscores');
+    error.code = 'INVALID_ENV_KEY';
+    throw error;
+  }
+}
+
+function validateEnvValue(value) {
+  if (typeof value !== 'string') {
+    const error = new Error('Environment variable values must be strings');
+    error.code = 'INVALID_ENV_VALUE';
+    throw error;
+  }
+
+  if (value.includes('\n') || value.includes('\r') || value.includes('\0')) {
+    const error = new Error('Environment variable values cannot contain newlines or null bytes');
+    error.code = 'INVALID_ENV_VALUE';
+    throw error;
+  }
+
+  if (value.length > MAX_ENV_VALUE_LENGTH) {
+    const error = new Error(`Environment variable values must be ${MAX_ENV_VALUE_LENGTH} characters or less`);
+    error.code = 'INVALID_ENV_VALUE';
+    throw error;
+  }
+}
 const __dirname = dirname(__filename);
 
 /**
@@ -319,9 +357,31 @@ function getVizDir(workspace) {
   return join(workspace, 'viz');
 }
 
+function ensureVizRegistry(workspace) {
+  const workspaceVizDir = getVizDir(workspace);
+  const registryPath = join(workspaceVizDir, 'visualizations.json');
+
+  mkdirSync(workspaceVizDir, { recursive: true });
+
+  if (!existsSync(registryPath)) {
+    writeFileSync(
+      registryPath,
+      JSON.stringify({
+        visualizations: [],
+        lastUpdated: new Date().toISOString(),
+        totalVisualizations: 0,
+        totalViews: 0,
+        version: '1.0'
+      }, null, 2)
+    );
+  }
+
+  return registryPath;
+}
 
 // Current viz directory
 let vizDir = getVizDir(currentWorkspace);
+ensureVizRegistry(currentWorkspace);
 
 // Security headers middleware
 app.use((req, res, next) => {
@@ -442,6 +502,7 @@ function switchWorkspace(workspacePath) {
   // Double-check sanitization (defense in depth)
   currentWorkspace = sanitizePath(workspacePath);
   vizDir = getVizDir(currentWorkspace);
+  ensureVizRegistry(currentWorkspace);
 
   // Re-initialize registry with new workspace viz dir
   registry = new VizRegistry(vizDir);
@@ -844,11 +905,7 @@ app.post('/api/workspace/create', (req, res) => {
     mkdirSync(join(workspacePath, 'tools'), { recursive: true });
     mkdirSync(join(workspacePath, 'scripts'), { recursive: true });
 
-    // Create empty visualizations.json
-    writeFileSync(
-      join(workspacePath, 'viz', 'visualizations.json'),
-      JSON.stringify({ visualizations: [] }, null, 2)
-    );
+    ensureVizRegistry(workspacePath);
 
     // Create package.json
     writeFileSync(
@@ -1563,6 +1620,13 @@ app.post('/api/connectors/install', (req, res) => {
       });
     }
 
+    if (typeof connectorId !== 'string' || !CONNECTOR_ID_REGEX.test(connectorId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'connectorId must use only letters, numbers, and dashes'
+      });
+    }
+
     // Connector template sources - check other LocalBase instances for connector templates
     // This allows copying connectors between instances without manual file management
     const templateSources = detectWorkspaces()
@@ -1662,11 +1726,27 @@ app.post('/api/env/save', (req, res) => {
     });
 
     // Merge new vars (overwrite existing)
-    Object.entries(vars).forEach(([key, value]) => {
-      if (value) {
+    try {
+      Object.entries(vars).forEach(([key, value]) => {
+        validateEnvKey(key);
+
+        if (value === undefined || value === null || value === '') {
+          delete existingVars[key];
+          return;
+        }
+
+        validateEnvValue(value);
         existingVars[key] = value;
+      });
+    } catch (validationError) {
+      if (validationError.code === 'INVALID_ENV_KEY' || validationError.code === 'INVALID_ENV_VALUE') {
+        return res.status(400).json({
+          success: false,
+          error: validationError.message
+        });
       }
-    });
+      throw validationError;
+    }
 
     // Rebuild env.local content
     let newContent = '# LocalBase environment variables\n';
@@ -1923,8 +2003,44 @@ app.post('/api/db/query', (req, res) => {
       });
     }
 
+    if (!Array.isArray(params)) {
+      return res.status(400).json({
+        success: false,
+        error: 'params must be an array'
+      });
+    }
+
+    if (typeof database !== 'string' || database.includes('..')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Database path traversal not allowed'
+      });
+    }
+
+    if (!/\.(db|sqlite|sqlite3)$/i.test(database)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Database path must point to a SQLite file'
+      });
+    }
+
+    if (!/^\s*SELECT\b/i.test(sql)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Only SELECT queries are allowed'
+      });
+    }
+
     // Resolve database path relative to workspace
     const dbPath = join(currentWorkspace, database);
+    const dataDir = join(currentWorkspace, 'data');
+
+    if (!isWithinDirectory(dbPath, dataDir)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Database path must stay within the workspace data directory'
+      });
+    }
 
     if (!existsSync(dbPath)) {
       return res.status(404).json({
@@ -1936,17 +2052,8 @@ app.post('/api/db/query', (req, res) => {
     const db = new Database(dbPath, { readonly: true });
 
     try {
-      // Determine if this is a SELECT or other query
-      const isSelect = sql.trim().toUpperCase().startsWith('SELECT');
-
-      let result;
-      if (isSelect) {
-        const stmt = db.prepare(sql);
-        result = stmt.all(...params);
-      } else {
-        const stmt = db.prepare(sql);
-        result = stmt.run(...params);
-      }
+      const stmt = db.prepare(sql);
+      const result = stmt.all(...params);
 
       db.close();
 

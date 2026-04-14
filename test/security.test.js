@@ -106,6 +106,17 @@ describe('Path Traversal Prevention', () => {
     );
   });
 
+  it('should block path traversal in database query path', async () => {
+    const res = await request('/api/db/query', {
+      method: 'POST',
+      body: {
+        database: '../package.json',
+        sql: 'SELECT 1'
+      }
+    });
+    assert.strictEqual(res.status, 403);
+  });
+
 });
 
 // ============================================================================
@@ -264,8 +275,8 @@ describe('Environment Variable Security', () => {
       method: 'POST',
       body: { vars: { '../../../etc/passwd': 'value' } }
     });
-    // Should either reject with 400 or sanitize the key
-    assert.ok(res.status === 400 || res.data.success === true);
+    assert.strictEqual(res.status, 400);
+    assert.match(res.data.error, /Environment variable names/i);
   });
 
   it('should reject newline injection in variable values', async () => {
@@ -273,9 +284,8 @@ describe('Environment Variable Security', () => {
       method: 'POST',
       body: { vars: { 'TEST_VAR': 'value\nMALICIOUS_VAR=evil' } }
     });
-    // The server should either reject or sanitize newlines
-    // to prevent env file injection
-    assert.ok(res.status === 200 || res.status === 400);
+    assert.strictEqual(res.status, 400);
+    assert.match(res.data.error, /cannot contain newlines/i);
   });
 
   it('should reject excessively long variable names', async () => {
@@ -284,8 +294,7 @@ describe('Environment Variable Security', () => {
       method: 'POST',
       body: { vars: { [longName]: 'value' } }
     });
-    // Should reject or truncate excessively long names
-    assert.ok(res.status === 400 || res.status === 200);
+    assert.strictEqual(res.status, 400);
   });
 
   it('should reject excessively long variable values', async () => {
@@ -294,8 +303,7 @@ describe('Environment Variable Security', () => {
       method: 'POST',
       body: { vars: { 'TEST_VAR': longValue } }
     });
-    // Should reject excessively long values
-    assert.ok(res.status === 400 || res.status === 200);
+    assert.strictEqual(res.status, 400);
   });
 
 });
@@ -311,8 +319,7 @@ describe('Connector Installation Security', () => {
       method: 'POST',
       body: { connectorId: '../../../etc/passwd' }
     });
-    // Should reject with 404 (not found) or 400 (invalid), not succeed
-    assert.ok(res.status === 404 || res.status === 400);
+    assert.strictEqual(res.status, 400);
     assert.strictEqual(res.data.success, false);
   });
 
@@ -321,7 +328,7 @@ describe('Connector Installation Security', () => {
       method: 'POST',
       body: { connectorId: 'hubspot\x00../../etc/passwd' }
     });
-    assert.ok(res.status === 404 || res.status === 400);
+    assert.strictEqual(res.status, 400);
     assert.strictEqual(res.data.success, false);
   });
 
@@ -331,7 +338,7 @@ describe('Connector Installation Security', () => {
       method: 'POST',
       body: { connectorId: longId }
     });
-    assert.ok(res.status === 404 || res.status === 400);
+    assert.strictEqual(res.status, 400);
     assert.strictEqual(res.data.success, false);
   });
 

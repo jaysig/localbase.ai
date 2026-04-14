@@ -6,7 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, dirname } from 'path';
+import { basename, join, dirname, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
@@ -19,6 +19,32 @@ let anthropic = null;
 let openai = null;
 let gemini = null;
 let lastEnvWorkspace = null;
+
+export function resolveVisualizationPath(workspace, filename) {
+  if (typeof filename !== 'string' || !filename.trim()) {
+    throw new Error('Visualization filename is required');
+  }
+
+  if (!filename.endsWith('.html')) {
+    throw new Error('Visualization filename must end with .html');
+  }
+
+  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+    throw new Error('Visualization filename must not include path separators');
+  }
+
+  const safeFilename = basename(filename);
+  const vizDir = join(workspace, 'viz');
+  const vizPath = join(vizDir, safeFilename);
+  const normalizedVizDir = normalize(vizDir);
+  const normalizedVizPath = normalize(vizPath);
+
+  if (normalizedVizPath !== normalizedVizDir && !normalizedVizPath.startsWith(normalizedVizDir + '/')) {
+    throw new Error('Visualization path must stay within the viz directory');
+  }
+
+  return { safeFilename, vizDir, vizPath };
+}
 
 /**
  * Load environment variables from workspace
@@ -325,7 +351,7 @@ async function executeTool(toolName, toolInput, workspace) {
       }
 
       case 'create_visualization': {
-        const vizDir = join(workspace, 'viz');
+        const { safeFilename, vizDir, vizPath } = resolveVisualizationPath(workspace, toolInput.filename);
         const registryPath = join(workspace, 'viz', 'visualizations.json');
 
         // Ensure viz directory exists
@@ -334,7 +360,6 @@ async function executeTool(toolName, toolInput, workspace) {
         }
 
         // Write the HTML file
-        const vizPath = join(vizDir, toolInput.filename);
         writeFileSync(vizPath, toolInput.html_content);
 
         // Update registry
@@ -344,17 +369,17 @@ async function executeTool(toolName, toolInput, workspace) {
         }
 
         // Generate ID from filename
-        const id = toolInput.filename.replace('.html', '').replace(/[^a-z0-9-]/gi, '-');
+        const id = safeFilename.replace('.html', '').replace(/[^a-z0-9-]/gi, '-');
 
         // Check if already exists
         const existingIndex = registry.visualizations.findIndex(v => v.id === id);
         const vizEntry = {
           id,
-          filename: toolInput.filename,
+          filename: safeFilename,
           title: toolInput.title,
           type: 'chart',
           library: 'apexcharts',
-          url: `/viz/${toolInput.filename}`,
+          url: `/viz/${safeFilename}`,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -372,8 +397,8 @@ async function executeTool(toolName, toolInput, workspace) {
 
         return {
           success: true,
-          message: `Visualization created: ${toolInput.filename}`,
-          url: `/viz/${toolInput.filename}`,
+          message: `Visualization created: ${safeFilename}`,
+          url: `/viz/${safeFilename}`,
           id
         };
       }
@@ -396,23 +421,23 @@ async function executeTool(toolName, toolInput, workspace) {
       }
 
       case 'read_visualization': {
-        const vizPath = join(workspace, 'viz', toolInput.filename);
+        const { safeFilename, vizPath } = resolveVisualizationPath(workspace, toolInput.filename);
         if (!existsSync(vizPath)) {
-          return { error: `Visualization not found: ${toolInput.filename}` };
+          return { error: `Visualization not found: ${safeFilename}` };
         }
 
         const content = readFileSync(vizPath, 'utf8');
         return {
-          filename: toolInput.filename,
+          filename: safeFilename,
           content: content,
           size: content.length
         };
       }
 
       case 'edit_visualization': {
-        const vizPath = join(workspace, 'viz', toolInput.filename);
+        const { safeFilename, vizPath } = resolveVisualizationPath(workspace, toolInput.filename);
         if (!existsSync(vizPath)) {
-          return { error: `Visualization not found: ${toolInput.filename}` };
+          return { error: `Visualization not found: ${safeFilename}` };
         }
 
         const content = readFileSync(vizPath, 'utf8');
@@ -437,8 +462,8 @@ async function executeTool(toolName, toolInput, workspace) {
 
         return {
           success: true,
-          message: `Successfully edited ${toolInput.filename}`,
-          filename: toolInput.filename
+          message: `Successfully edited ${safeFilename}`,
+          filename: safeFilename
         };
       }
 

@@ -13,7 +13,23 @@ const CONFIG_DIR = join(homedir(), '.localbase');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 
 function isLocalBaseWorkspace(workspacePath) {
-  return existsSync(join(workspacePath, 'viz', 'visualizations.json'));
+  const vizDir = join(workspacePath, 'viz');
+
+  if (existsSync(join(vizDir, 'visualizations.json'))) {
+    return true;
+  }
+
+  if (!existsSync(vizDir)) {
+    return false;
+  }
+
+  // Fresh clones may not have a registry yet. Treat a directory with the
+  // expected LocalBase structure as a workspace so bootstrap can complete.
+  return (
+    existsSync(join(workspacePath, 'package.json')) &&
+    existsSync(join(workspacePath, 'tools')) &&
+    existsSync(join(workspacePath, 'data'))
+  );
 }
 
 /**
@@ -26,6 +42,10 @@ export function detectWorkspaces() {
   const workspaces = [];
 
   try {
+    if (!existsSync(workDir)) {
+      return workspaces;
+    }
+
     const entries = readdirSync(workDir);
 
     for (const entry of entries) {
