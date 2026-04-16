@@ -6,7 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, relative, extname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
@@ -204,6 +204,73 @@ const tools = [
       },
       required: ['filename', 'old_string', 'new_string']
     }
+  },
+  {
+    name: 'list_files',
+    description: 'List files and directories in the workspace. Use this to explore the project structure, find connectors, projects, scripts, and source code.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        directory: {
+          type: 'string',
+          description: 'Directory path relative to workspace root (e.g., "projects", "connectors/hubspot", "app/src"). Defaults to root.'
+        },
+        max_depth: {
+          type: 'number',
+          description: 'Maximum depth to recurse (default: 2). Use 1 for just the immediate directory.'
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'read_file',
+    description: 'Read the contents of a file in the workspace. Use this to read source code, configuration, markdown files, CLAUDE.md, project definitions, etc.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'File path relative to workspace root (e.g., "CLAUDE.md", "projects/jobs/agent.js", "connectors/hubspot/service.js")'
+        },
+        line_start: {
+          type: 'number',
+          description: 'Optional: start reading from this line number (1-based)'
+        },
+        line_end: {
+          type: 'number',
+          description: 'Optional: stop reading at this line number (inclusive)'
+        }
+      },
+      required: ['path']
+    }
+  },
+  {
+    name: 'search_files',
+    description: 'Search for text patterns across workspace files. Use this to find functions, classes, references, or any text across the codebase.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pattern: {
+          type: 'string',
+          description: 'Text or regex pattern to search for'
+        },
+        directory: {
+          type: 'string',
+          description: 'Directory to search in, relative to workspace root. Defaults to entire workspace.'
+        },
+        file_extensions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter by file extensions (e.g., [".js", ".md", ".json"]). Defaults to all text files.'
+        },
+        max_results: {
+          type: 'number',
+          description: 'Maximum number of matches to return (default: 20)'
+        }
+      },
+      required: ['pattern']
+    }
   }
 ];
 
@@ -216,6 +283,98 @@ const openaiTools = tools.map(tool => ({
     parameters: tool.input_schema
   }
 }));
+
+/**
+ * Security: blocked path segments for filesystem tools
+ */
+const BLOCKED_PATHS = ['node_modules', '.git', '.env', 'env.local', '.claude'];
+const BLOCKED_EXTENSIONS = ['.env', '.pem', '.key', '.secret'];
+const MAX_FILE_SIZE = 100 * 1024; // 100KB
+
+function isPathBlocked(relPath) {
+  const segments = relPath.split('/');
+  for (const seg of segments) {
+    for (const blocked of BLOCKED_PATHS) {
+      if (seg === blocked || seg.startsWith('.env')) return true;
+    }
+  }
+  for (const ext of BLOCKED_EXTENSIONS) {
+    if (relPath.endsWith(ext)) return true;
+  }
+  return false;
+}
+
+function isTextFile(filePath) {
+  const textExts = ['.js', '.jsx', '.ts', '.tsx', '.json', '.md', '.html', '.css', '.sql', '.sh', '.yaml', '.yml', '.toml', '.txt', '.csv', '.xml', '.svg', '.mjs', '.cjs', '.graphql', '.prisma', '.py', '.rb', '.go', '.rs', '.java', '.gitignore', '.gitkeep', '.npmrc', '.env.example'];
+  const ext = extname(filePath).toLowerCase();
+  const name = basename(filePath);
+  return textExts.includes(ext) || name === 'Makefile' || name === 'Dockerfile' || name === 'LICENSE' || !ext;
+}
+
+/**
+ * Build directory tree for workspace context
+ */
+function buildDirectoryTree(dir, prefix = '', maxDepth = 2, currentDepth = 0) {
+  if (currentDepth >= maxDepth) return '';
+  let result = '';
+  try {
+    const items = readdirSync(dir).filter(item => !item.startsWith('.') && item !== 'node_modules').sort();
+    for (let i = 0; i < items.length; i++) {
+      const itemPath = join(dir, items[i]);
+      const isLast = i === items.length - 1;
+      const connector = isLast ? '└── ' : '├── ';
+      const stat = statSync(itemPath);
+      if (stat.isDirectory()) {
+        result += `${prefix}${connector}${items[i]}/\n`;
+        const nextPrefix = prefix + (isLast ? '    ' : '│   ');
+        result += buildDirectoryTree(itemPath, nextPrefix, maxDepth, currentDepth + 1);
+      } else {
+        result += `${prefix}${connector}${items[i]}\n`;
+      }
+    }
+  } catch (e) { /* ignore permission errors */ }
+  return result;
+}
+
+/**
+ * Build workspace context for system prompt
+ */
+function buildWorkspaceContext(workspace) {
+  let context = '';
+
+  // Read CLAUDE.md if it exists
+  const claudeMdPath = join(workspace, 'CLAUDE.md');
+  if (existsSync(claudeMdPath)) {
+    try {
+      const claudeMd = readFileSync(claudeMdPath, 'utf8');
+      context += `\nPROJECT DOCUMENTATION (from CLAUDE.md):\n${claudeMd}\n`;
+    } catch (e) { /* ignore */ }
+  }
+
+  // Read knowledge/schemas.md if it exists (auto-generated schema reference)
+  const schemasPath = join(workspace, 'knowledge', 'schemas.md');
+  if (existsSync(schemasPath)) {
+    try {
+      const schemas = readFileSync(schemasPath, 'utf8');
+      context += `\nDATABASE SCHEMA REFERENCE:\n${schemas}\n`;
+    } catch (e) { /* ignore */ }
+  }
+
+  // Read projects.json if it exists
+  const projectsJsonPath = join(workspace, 'projects', 'projects.json');
+  if (existsSync(projectsJsonPath)) {
+    try {
+      const projects = readFileSync(projectsJsonPath, 'utf8');
+      context += `\nPROJECTS REGISTRY:\n${projects}\n`;
+    } catch (e) { /* ignore */ }
+  }
+
+  // Build directory tree (depth 2)
+  context += `\nWORKSPACE DIRECTORY STRUCTURE:\n`;
+  context += buildDirectoryTree(workspace, '', 2);
+
+  return context;
+}
 
 /**
  * Execute a tool and return result
@@ -442,6 +601,150 @@ async function executeTool(toolName, toolInput, workspace) {
         };
       }
 
+      case 'list_files': {
+        const dir = toolInput.directory ? join(workspace, toolInput.directory) : workspace;
+        const relDir = toolInput.directory || '.';
+        const maxDepth = toolInput.max_depth || 2;
+
+        // Security check
+        if (toolInput.directory && isPathBlocked(toolInput.directory)) {
+          return { error: `Access denied: ${toolInput.directory}` };
+        }
+
+        if (!existsSync(dir)) {
+          return { error: `Directory not found: ${relDir}` };
+        }
+
+        const tree = buildDirectoryTree(dir, '', maxDepth);
+        return {
+          directory: relDir,
+          tree: tree || '(empty directory)'
+        };
+      }
+
+      case 'read_file': {
+        const filePath = join(workspace, toolInput.path);
+
+        // Security checks
+        if (isPathBlocked(toolInput.path)) {
+          return { error: `Access denied: ${toolInput.path} (blocked for security)` };
+        }
+
+        // Prevent path traversal
+        const resolved = join(workspace, toolInput.path);
+        if (!resolved.startsWith(workspace)) {
+          return { error: 'Path traversal not allowed' };
+        }
+
+        if (!existsSync(filePath)) {
+          return { error: `File not found: ${toolInput.path}` };
+        }
+
+        const stat = statSync(filePath);
+        if (stat.isDirectory()) {
+          return { error: `${toolInput.path} is a directory. Use list_files instead.` };
+        }
+
+        if (stat.size > MAX_FILE_SIZE) {
+          return {
+            error: `File too large (${Math.round(stat.size / 1024)}KB). Use line_start/line_end to read a portion.`,
+            size: stat.size
+          };
+        }
+
+        if (!isTextFile(filePath)) {
+          return { error: `Cannot read binary file: ${toolInput.path}` };
+        }
+
+        let content = readFileSync(filePath, 'utf8');
+        const totalLines = content.split('\n').length;
+
+        // Apply line range if specified
+        if (toolInput.line_start || toolInput.line_end) {
+          const lines = content.split('\n');
+          const start = Math.max(1, toolInput.line_start || 1) - 1;
+          const end = Math.min(lines.length, toolInput.line_end || lines.length);
+          content = lines.slice(start, end).join('\n');
+        }
+
+        return {
+          path: toolInput.path,
+          content,
+          totalLines,
+          size: stat.size
+        };
+      }
+
+      case 'search_files': {
+        const searchDir = toolInput.directory ? join(workspace, toolInput.directory) : workspace;
+        const maxResults = toolInput.max_results || 20;
+        const extensions = toolInput.file_extensions || null;
+
+        if (toolInput.directory && isPathBlocked(toolInput.directory)) {
+          return { error: `Access denied: ${toolInput.directory}` };
+        }
+
+        if (!existsSync(searchDir)) {
+          return { error: `Directory not found: ${toolInput.directory}` };
+        }
+
+        let regex;
+        try {
+          regex = new RegExp(toolInput.pattern, 'gi');
+        } catch (e) {
+          // Fall back to literal match
+          regex = new RegExp(toolInput.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        }
+
+        const results = [];
+        const searchRecursive = (dir) => {
+          if (results.length >= maxResults) return;
+          try {
+            const items = readdirSync(dir);
+            for (const item of items) {
+              if (results.length >= maxResults) return;
+              const itemPath = join(dir, item);
+              const relPath = relative(workspace, itemPath);
+
+              if (isPathBlocked(relPath) || item.startsWith('.') || item === 'node_modules') continue;
+
+              const stat = statSync(itemPath);
+              if (stat.isDirectory()) {
+                searchRecursive(itemPath);
+              } else if (isTextFile(itemPath) && stat.size < MAX_FILE_SIZE) {
+                // Check extension filter
+                if (extensions && !extensions.includes(extname(itemPath).toLowerCase())) continue;
+
+                try {
+                  const content = readFileSync(itemPath, 'utf8');
+                  const lines = content.split('\n');
+                  for (let i = 0; i < lines.length; i++) {
+                    if (results.length >= maxResults) break;
+                    regex.lastIndex = 0;
+                    if (regex.test(lines[i])) {
+                      results.push({
+                        file: relPath,
+                        line: i + 1,
+                        content: lines[i].trim().slice(0, 200)
+                      });
+                    }
+                  }
+                } catch (e) { /* skip unreadable files */ }
+              }
+            }
+          } catch (e) { /* skip unreadable dirs */ }
+        };
+
+        searchRecursive(searchDir);
+
+        return {
+          pattern: toolInput.pattern,
+          matchCount: results.length,
+          truncated: results.length >= maxResults,
+          results
+        };
+      }
+
       default:
         return { error: `Unknown tool: ${toolName}` };
     }
@@ -454,18 +757,29 @@ async function executeTool(toolName, toolInput, workspace) {
 /**
  * System prompt for the chat assistant
  */
-const SYSTEM_PROMPT = `You are LocalBase Assistant, an AI helper for data visualization and analytics.
+const SYSTEM_PROMPT = `You are LocalBase Assistant, an AI helper for data visualization, analytics, and project management.
 
 IMPORTANT: You MUST use your tools to complete tasks. Never just describe what you would do - actually DO it by calling the appropriate tool.
 
-You have access to the user's LocalBase workspace which contains:
-- SQLite databases with business data (HubSpot, Mixpanel, G2, etc.)
+You have FULL access to the user's LocalBase workspace including:
+- SQLite databases with business data
 - A visualization system using ApexCharts
+- All source code, connectors, projects, and configuration files
+- Project definitions and agent code
 
 Your capabilities:
 1. Query databases to explore and analyze data
 2. Create visualizations (charts, graphs) using ApexCharts
-3. Help users understand their data
+3. Browse and read source code, project files, and documentation
+4. Search across the codebase for functions, patterns, and references
+5. Help users understand their data AND their codebase
+
+FILESYSTEM ACCESS:
+- Use list_files to explore directories (projects/, connectors/, app/, tools/, etc.)
+- Use read_file to read source code, CLAUDE.md, project definitions, configs
+- Use search_files to find functions, patterns, or references across the codebase
+- When asked about a project or agent, use these tools to find and read the relevant files
+- ALWAYS explore the codebase when asked about projects, connectors, or code — never say you can't access files
 
 MODIFYING EXISTING VISUALIZATIONS (CRITICAL):
 When asked to modify/update/change a visualization:
@@ -667,8 +981,15 @@ export async function handleChat(messages, workspace, currentViz = null, options
     console.log(`📊 Current viz context: ${currentViz.title} (${currentViz.filename})`);
   }
 
-  // Build system prompt with current viz context
+  // Build system prompt with workspace context
   let systemPrompt = SYSTEM_PROMPT;
+
+  // Inject workspace context (directory tree, CLAUDE.md, projects)
+  const workspaceContext = buildWorkspaceContext(workspace);
+  if (workspaceContext) {
+    systemPrompt += `\n\nWORKSPACE CONTEXT:\n${workspaceContext}`;
+  }
+
   if (currentViz) {
     systemPrompt += `\n\nCURRENT VISUALIZATION CONTEXT:
 The user has "${currentViz.title}" open in the preview pane.

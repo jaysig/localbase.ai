@@ -77,6 +77,10 @@ if ! check_port 5173; then
     fi
 fi
 
+# Build knowledge index
+echo "📚 Building knowledge index..."
+node scripts/build-knowledge.js . 2>/dev/null || echo -e "${YELLOW}Warning: Knowledge index build skipped${NC}"
+
 # Start the dev server
 echo ""
 echo -e "${GREEN}Starting dev server...${NC}"
