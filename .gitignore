@@ -126,6 +126,9 @@ connectors/**/gmail_token.json
 connectors/**/gmail_credentials.json
 connectors/**/*.token.json
 connectors/**/*_credentials.json
+# Generated knowledge index (instance-specific)
+knowledge/
+
 # Instance-specific projects (analysis, etc.)
 /projects/
 
